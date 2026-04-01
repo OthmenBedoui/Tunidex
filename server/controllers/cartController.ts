@@ -22,14 +22,12 @@ interface AuthRequest extends Request {
  */
 
 export const getCart = async (req: AuthRequest, res: Response) => {
-    if (!prisma?.cart) return res.status(500).json({ error: 'Prisma not initialized' });
     const cart = await prisma.cart.findUnique({ where: { userId: req.user?.id }, include: { items: { include: { listing: true } } } });
     res.json(cart?.items || []);
 };
 
 export const addToCart = async (req: AuthRequest, res: Response) => {
     const { listingId } = req.body;
-    if (!prisma?.cart) return res.status(500).json({ error: 'Prisma not initialized' });
     let cart = await prisma.cart.findUnique({ where: { userId: req.user?.id } });
     if (!cart) cart = await prisma.cart.create({ data: { userId: req.user?.id } });
     const existing = await prisma.cartItem.findFirst({ where: { cartId: cart.id, listingId } });
@@ -56,7 +54,6 @@ export const removeFromCart = async (req: Request, res: Response) => {
  *         description: Order created
  */
 export const checkout = async (req: AuthRequest, res: Response) => {
-    if (!prisma?.cart) return res.status(500).json({ error: 'Prisma not initialized' });
     const cart = await prisma.cart.findUnique({ where: { userId: req.user?.id }, include: { items: { include: { listing: true } } } });
     if (!cart || cart.items.length === 0) return res.status(400).json({ error: "Vide" });
     const total = cart.items.reduce((s: number, i: { listing: { price: number }, quantity: number }) => s + (i.listing.price * i.quantity), 0);

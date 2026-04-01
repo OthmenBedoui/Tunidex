@@ -64,6 +64,7 @@ export interface User {
   balance: number;
   avatarUrl: string;
   subscriptionTier: SubscriptionTier;
+  emailVerified?: boolean;
   // Profile Fields
   fullName?: string;
   address?: string;
@@ -111,6 +112,19 @@ export interface SiteConfig {
   siteName: string;
   faviconUrl?: string;
   primaryColor?: string;
+  // SMTP Configuration
+  smtpMailerName?: string;
+  smtpHost?: string;
+  smtpDriver?: string;
+  smtpPort?: string;
+  smtpUsername?: string;
+  smtpEmailId?: string;
+  smtpEncryption?: string;
+  smtpPassword?: string;
+  // Payment Gateway: Click2pay
+  click2payEnabled?: boolean;
+  click2payMerchantId?: string;
+  click2payApiKey?: string;
 }
 
 export interface CartItem {

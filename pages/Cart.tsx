@@ -2,11 +2,12 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2, ShoppingBag, ArrowRight, Lock, CreditCard, Smartphone, Wallet } from 'lucide-react';
 import { api } from '../services/api';
-import { CartItem, ProductType } from '../types';
+import { CartItem, ProductType, SiteConfig } from '../types';
 
 interface CartProps {
   navigateTo: (page: string) => void;
   onCartUpdate: (count: number) => void;
+  siteConfig: SiteConfig;
 }
 
 // Données Mock pour affichage immédiat
@@ -21,7 +22,7 @@ const MOCK_CART_ITEMS: CartItem[] = [
     }
 ];
 
-const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate }) => {
+const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate, siteConfig }) => {
   const [items, setItems] = useState<CartItem[]>(MOCK_CART_ITEMS);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('edinar');
@@ -31,7 +32,11 @@ const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate }) => {
     api.getCart()
       .then(data => { if(data.length > 0) setItems(data); })
       .catch(console.error);
-  }, []);
+    
+    if (siteConfig.click2payEnabled) {
+        setPaymentMethod('click2pay');
+    }
+  }, [siteConfig]);
 
   const handleRemove = async (id: string) => {
     const newItems = items.filter(i => i.id !== id);
@@ -50,13 +55,21 @@ const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate }) => {
         // In a real app, the backend handles this. 
         // For the demo, we'll simulate the checkout and assignment.
         const order = await api.checkout();
-        alert(`Paiement réussi ! Votre commande #${order.id.slice(0, 8)} est prête.`);
+        let message = `Paiement réussi ! Votre commande #${order.id.slice(0, 8)} est prête.`;
+        if (siteConfig.smtpHost) {
+            message += "\n\nUne facture a été envoyée à votre adresse email.";
+        }
+        alert(message);
         setItems([]);
         onCartUpdate(0);
         navigateTo('user-dashboard');
     } catch {
         // Fallback for demo if API fails
-        alert(`Paiement simulé avec succès via ${paymentMethod} !`);
+        let message = `Paiement simulé avec succès via ${paymentMethod.toUpperCase()} !`;
+        if (siteConfig.smtpHost) {
+            message += "\n\nUne facture a été envoyée à votre adresse email.";
+        }
+        alert(message);
         setItems([]);
         onCartUpdate(0);
         navigateTo('user-dashboard');
@@ -110,8 +123,8 @@ const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate }) => {
             <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 sticky top-24">
             <h3 className="font-bold text-xl mb-6 flex items-center"><Wallet size={20} className="mr-2" /> Paiement</h3>
             
-            <div className="grid grid-cols-3 gap-2 mb-8">
-                {['edinar', 'carte', 'flouci'].map(pm => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-8">
+                {['edinar', 'carte', 'flouci', ...(siteConfig.click2payEnabled ? ['click2pay'] : [])].map(pm => (
                     <button 
                         key={pm}
                         onClick={() => setPaymentMethod(pm)}
@@ -120,7 +133,8 @@ const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate }) => {
                         {pm === 'edinar' && <CreditCard size={20} className="mb-1" />}
                         {pm === 'carte' && <Lock size={20} className="mb-1" />}
                         {pm === 'flouci' && <Smartphone size={20} className="mb-1" />}
-                        <span className="text-xs font-bold uppercase">{pm}</span>
+                        {pm === 'click2pay' && <CreditCard size={20} className="mb-1 text-amber-500" />}
+                        <span className="text-[10px] font-bold uppercase">{pm}</span>
                     </button>
                 ))}
             </div>

@@ -29,6 +29,9 @@ export const api = {
   getCurrentUser: () => fetchWithFallback<User>(`${API_URL}/auth/me`, { headers: getHeaders() }),
   
   // Profile & Subscription
+  updateProfile: (data: { username: string, email: string, avatarUrl?: string, password?: string }) => 
+      fetchWithFallback<User>(`${API_URL}/users/profile`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(data) }),
+  sendVerificationEmail: () => fetchWithFallback(`${API_URL}/auth/verify-email`, { method: 'POST', headers: getHeaders() }),
   updateSubscription: (data: { tier: SubscriptionTier, fullName: string, address: string, phone: string, paymentMethod: string }) => 
       fetchWithFallback(`${API_URL}/users/subscribe`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data) }),
 

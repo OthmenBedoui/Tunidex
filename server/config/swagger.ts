@@ -62,7 +62,7 @@ const options = {
     },
   },
   // Point to the controller files where we write JSDoc
-  apis: ['./controllers/*.ts'], 
+  apis: ['./server/controllers/*.ts'], 
 };
 
 export const swaggerSpec = swaggerJsdoc(options);

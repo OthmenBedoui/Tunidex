@@ -15,6 +15,8 @@ import * as LucideIcons from 'lucide-react';
 const INITIAL_GUEST: User = { id: 'guest', username: 'Invité', email: '', role: UserRole.GUEST, balance: 0, avatarUrl: 'https://via.placeholder.com/150', subscriptionTier: SubscriptionTier.FREE };
 
 // --- APP COMPONENT ---
+import Profile from './pages/Profile';
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User>(INITIAL_GUEST);
   const [listings, setListings] = useState<Listing[]>([]);
@@ -125,7 +127,7 @@ const App: React.FC = () => {
     switch (currentPage) {
       case 'home': return <Home listings={listings} categories={categories} onViewProduct={handleViewProduct} navigateTo={navigateTo} />;
       case 'login': return <Login onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} />;
-      case 'cart': return <Cart navigateTo={navigateTo} onCartUpdate={updateCartCount} />;
+      case 'cart': return <Cart navigateTo={navigateTo} onCartUpdate={updateCartCount} siteConfig={siteConfig} />;
       case 'subscription': return <Subscription user={user} onSubscribe={() => refreshData()} navigateTo={navigateTo} />;
       
       case 'category': {
@@ -211,7 +213,8 @@ const App: React.FC = () => {
                   onUpdateSiteConfig={handleUpdateSiteConfig}
                />;
       
-      case 'user-dashboard': return <UserDashboard user={user} orders={orders} />;
+      case 'user-dashboard': return <UserDashboard user={user} orders={orders} navigateTo={navigateTo} />;
+      case 'profile': return <Profile user={user} onUpdateUser={setUser} navigateTo={navigateTo} />;
       default: return <Home listings={listings} categories={categories} onViewProduct={handleViewProduct} navigateTo={navigateTo} />;
     }
   };

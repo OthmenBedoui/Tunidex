@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Package, TrendingUp, DollarSign, Plus, Loader2, Zap, Crown, Users, Shield, FolderTree, Trash2, Edit, LayoutGrid, Save, X, Settings } from 'lucide-react';
+import { Package, TrendingUp, DollarSign, Plus, Loader2, Zap, Crown, Users, Shield, FolderTree, Trash2, Edit, LayoutGrid, Save, X, Settings, User as UserIcon, Clock, History } from 'lucide-react';
 import { User, Order, OrderStatus, Listing, UserRole, Category, SubCategory, ProductType, LoginCredential, SiteConfig } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { generateListingDescription } from '../services/geminiService';
@@ -64,6 +64,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [editUserRole, setEditUserRole] = useState<UserRole>(UserRole.CLIENT);
   const [editUserBalance, setEditUserBalance] = useState('');
   const [selectedCatForSub, setSelectedCatForSub] = useState('');
+  const [userSubTab, setUserSubTab] = useState<'all' | 'roles'>('all');
 
   // --- Listing Create State ---
   const [newListingGame, setNewListingGame] = useState('');
@@ -121,11 +122,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [siteLogo, setSiteLogo] = useState(siteConfig.logoUrl);
   const [siteName, setSiteName] = useState(siteConfig.siteName);
   const [siteFavicon, setSiteFavicon] = useState(siteConfig.faviconUrl || '');
+  
+  // --- SMTP Config State ---
+  const [smtpMailerName, setSmtpMailerName] = useState(siteConfig.smtpMailerName || '');
+  const [smtpHost, setSmtpHost] = useState(siteConfig.smtpHost || '');
+  const [smtpDriver, setSmtpDriver] = useState(siteConfig.smtpDriver || '');
+  const [smtpPort, setSmtpPort] = useState(siteConfig.smtpPort || '');
+  const [smtpUsername, setSmtpUsername] = useState(siteConfig.smtpUsername || '');
+  const [smtpEmailId, setSmtpEmailId] = useState(siteConfig.smtpEmailId || '');
+  const [smtpEncryption, setSmtpEncryption] = useState(siteConfig.smtpEncryption || '');
+  const [smtpPassword, setSmtpPassword] = useState(siteConfig.smtpPassword || '');
+
+  // --- Click2pay Config State ---
+  const [click2payEnabled, setClick2payEnabled] = useState(siteConfig.click2payEnabled || false);
+  const [click2payMerchantId, setClick2payMerchantId] = useState(siteConfig.click2payMerchantId || '');
+  const [click2payApiKey, setClick2payApiKey] = useState(siteConfig.click2payApiKey || '');
 
   useEffect(() => {
     setSiteLogo(siteConfig.logoUrl);
     setSiteName(siteConfig.siteName);
     setSiteFavicon(siteConfig.faviconUrl || '');
+    setSmtpMailerName(siteConfig.smtpMailerName || '');
+    setSmtpHost(siteConfig.smtpHost || '');
+    setSmtpDriver(siteConfig.smtpDriver || '');
+    setSmtpPort(siteConfig.smtpPort || '');
+    setSmtpUsername(siteConfig.smtpUsername || '');
+    setSmtpEmailId(siteConfig.smtpEmailId || '');
+    setSmtpEncryption(siteConfig.smtpEncryption || '');
+    setSmtpPassword(siteConfig.smtpPassword || '');
+    setClick2payEnabled(siteConfig.click2payEnabled || false);
+    setClick2payMerchantId(siteConfig.click2payMerchantId || '');
+    setClick2payApiKey(siteConfig.click2payApiKey || '');
   }, [siteConfig]);
 
   useEffect(() => {
@@ -410,59 +437,304 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
             </div>
         )}
          {activeTab === 'settings' && user.role === UserRole.ADMIN && (
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-6 space-y-6">
-                <h2 className="text-xl font-bold text-slate-900 border-b pb-4">Paramètres du Site</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nom du Site</label>
-                            <input 
-                                type="text" 
-                                className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
-                                value={siteName}
-                                onChange={(e) => setSiteName(e.target.value)}
-                                placeholder="Tunidex"
-                            />
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Section 1: Logo & Icone du Site */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div className="flex items-center space-x-2">
+                            <div className="p-2 bg-indigo-100 rounded-lg">
+                                <LucideIcons.Layout className="text-indigo-600" size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 leading-tight">Logo & Icone du Site</h2>
+                                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Identité visuelle et branding</p>
+                            </div>
                         </div>
-                        <div>
-                            <ImageInput 
-                                label="URL du Logo"
-                                value={siteLogo}
-                                onChange={setSiteLogo}
-                                placeholder="https://..."
-                            />
-                        </div>
-                        <div>
-                            <ImageInput 
-                                label="URL du Favicon (Icône)"
-                                value={siteFavicon}
-                                onChange={setSiteFavicon}
-                                placeholder="https://..."
-                            />
-                        </div>
-                        <button 
-                            onClick={() => onUpdateSiteConfig({ siteName, logoUrl: siteLogo, faviconUrl: siteFavicon })}
-                            className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition flex items-center"
-                        >
-                            <Save size={18} className="mr-2" /> Enregistrer les modifications
-                        </button>
                     </div>
-                    
-                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 flex flex-col items-center justify-center text-center">
-                        <div className="text-xs font-bold text-slate-400 uppercase mb-4">Aperçu du Header</div>
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex items-center space-x-3 w-full">
-                            {siteLogo ? (
-                                <img src={siteLogo} alt="Logo" className="h-8 w-auto" />
-                            ) : (
-                                <div className="bg-indigo-600 text-white p-1.5 rounded font-bold text-xl w-10 h-10 flex items-center justify-center">
-                                    {siteName.charAt(0)}
+                    <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider flex items-center">
+                                    <LucideIcons.Type size={14} className="mr-1.5 text-slate-400" /> Nom du Site
+                                </label>
+                                <input 
+                                    type="text" 
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition bg-slate-50/30 font-medium"
+                                    value={siteName}
+                                    onChange={(e) => setSiteName(e.target.value)}
+                                    placeholder="Tunidex"
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 gap-6">
+                                <ImageInput 
+                                    label="Logo Principal"
+                                    value={siteLogo}
+                                    onChange={setSiteLogo}
+                                    placeholder="URL du logo ou upload"
+                                />
+                                <ImageInput 
+                                    label="Favicon (Icône de l'onglet)"
+                                    value={siteFavicon}
+                                    onChange={setSiteFavicon}
+                                    placeholder="URL de l'icône (16x16 ou 32x32)"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="flex flex-col items-center justify-center p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 relative overflow-hidden group">
+                            <div className="absolute top-4 left-4 flex items-center space-x-1.5">
+                                <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                                <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+                                <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                            </div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase mb-8 tracking-widest">Aperçu en temps réel</div>
+                            
+                            {/* Browser Tab Preview */}
+                            <div className="w-full max-w-sm bg-white rounded-t-xl border border-slate-200 shadow-sm mb-4 overflow-hidden">
+                                <div className="bg-slate-100 px-3 py-1.5 flex items-center space-x-2 border-b border-slate-200">
+                                    <div className="bg-white px-3 py-1 rounded-t-md border-x border-t border-slate-200 flex items-center space-x-2 max-w-[150px]">
+                                        {siteFavicon ? (
+                                            <img src={siteFavicon} alt="Favicon" className="w-3.5 h-3.5 object-contain" referrerPolicy="no-referrer" />
+                                        ) : (
+                                            <LucideIcons.Globe size={12} className="text-slate-400" />
+                                        )}
+                                        <span className="text-[10px] font-medium text-slate-600 truncate">{siteName}</span>
+                                        <LucideIcons.X size={10} className="text-slate-400" />
+                                    </div>
                                 </div>
-                            )}
-                            <span className="font-bold text-xl tracking-tight text-slate-900">{siteName}</span>
+                            </div>
+
+                            {/* Header Preview */}
+                            <div className="bg-white p-5 rounded-xl shadow-xl border border-slate-100 flex items-center justify-between w-full max-w-sm group-hover:scale-105 transition-transform duration-500">
+                                <div className="flex items-center space-x-4">
+                                    {siteLogo ? (
+                                        <img src={siteLogo} alt="Logo Preview" className="h-10 w-auto object-contain" referrerPolicy="no-referrer" />
+                                    ) : (
+                                        <div className="bg-indigo-600 text-white p-2 rounded-lg font-black text-2xl w-12 h-12 flex items-center justify-center shadow-lg shadow-indigo-200">
+                                            {siteName.charAt(0)}
+                                        </div>
+                                    )}
+                                    <span className="font-black text-2xl tracking-tighter text-slate-900">{siteName}</span>
+                                </div>
+                                <div className="flex space-x-2">
+                                    <div className="w-8 h-2 bg-slate-100 rounded-full"></div>
+                                    <div className="w-12 h-2 bg-slate-100 rounded-full"></div>
+                                </div>
+                            </div>
+                            
+                            <p className="text-[10px] text-slate-400 mt-8 italic max-w-[240px] text-center leading-relaxed">
+                                Voici comment votre marque apparaîtra dans l'onglet du navigateur et dans l'en-tête de votre site.
+                            </p>
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-4 italic">Ceci est un aperçu de la façon dont votre logo apparaîtra dans la barre de navigation.</p>
                     </div>
+                </div>
+
+                {/* Section 2: Configuration SMTP */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div className="flex items-center space-x-2">
+                            <div className="p-2 bg-indigo-100 rounded-lg">
+                                <LucideIcons.Mail className="text-indigo-600" size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 leading-tight">Serveur de Messagerie (SMTP)</h2>
+                                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Envoi d'emails et facturation</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center">
+                                <LucideIcons.CheckCircle2 size={12} className="mr-1" /> Automatisé
+                            </div>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Nom de l'expéditeur</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all"
+                                        value={smtpMailerName}
+                                        onChange={(e) => setSmtpMailerName(e.target.value)}
+                                        placeholder="Tunidex Support"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Driver</label>
+                                    <select 
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all font-medium"
+                                        value={smtpDriver}
+                                        onChange={(e) => setSmtpDriver(e.target.value)}
+                                    >
+                                        <option value="smtp">SMTP</option>
+                                        <option value="mailgun">Mailgun</option>
+                                        <option value="sendgrid">SendGrid</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Hôte SMTP</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all"
+                                        value={smtpHost}
+                                        onChange={(e) => setSmtpHost(e.target.value)}
+                                        placeholder="smtp.gmail.com"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Port</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all"
+                                            value={smtpPort}
+                                            onChange={(e) => setSmtpPort(e.target.value)}
+                                            placeholder="587"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Cryptage</label>
+                                        <select 
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all font-medium"
+                                            value={smtpEncryption}
+                                            onChange={(e) => setSmtpEncryption(e.target.value)}
+                                        >
+                                            <option value="tls">TLS</option>
+                                            <option value="ssl">SSL</option>
+                                            <option value="none">Aucun</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Email ID (Expéditeur)</label>
+                                    <input 
+                                        type="email" 
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all"
+                                        value={smtpEmailId}
+                                        onChange={(e) => setSmtpEmailId(e.target.value)}
+                                        placeholder="contact@votre-site.com"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div className="relative">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Utilisateur / Mot de passe</label>
+                                        <div className="flex space-x-2">
+                                            <input 
+                                                type="text" 
+                                                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all text-sm"
+                                                value={smtpUsername}
+                                                onChange={(e) => setSmtpUsername(e.target.value)}
+                                                placeholder="User"
+                                            />
+                                            <input 
+                                                type="password" 
+                                                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all text-sm"
+                                                value={smtpPassword}
+                                                onChange={(e) => setSmtpPassword(e.target.value)}
+                                                placeholder="Pass"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-8 p-5 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start space-x-4">
+                            <div className="p-2 bg-white rounded-full shadow-sm">
+                                <LucideIcons.Info size={18} className="text-indigo-600" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-indigo-900 mb-1">Automatisation de la Facturation</h4>
+                                <p className="text-xs text-indigo-700 leading-relaxed opacity-80">
+                                    Une fois configuré, le système générera automatiquement des factures PDF professionnelles pour chaque commande et les enverra à vos clients. Assurez-vous que vos identifiants SMTP sont valides pour éviter les échecs d'envoi.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Section 3: Configuration Click2pay */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden opacity-90 hover:opacity-100 transition-opacity">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div className="flex items-center space-x-2">
+                            <div className="p-2 bg-indigo-100 rounded-lg">
+                                <LucideIcons.CreditCard className="text-indigo-600" size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 leading-tight">Passerelle de Paiement</h2>
+                                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Click2pay Tunisie</p>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                className="sr-only peer"
+                                checked={click2payEnabled}
+                                onChange={(e) => setClick2payEnabled(e.target.checked)}
+                            />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            <span className="ml-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{click2payEnabled ? 'Activé' : 'Désactivé'}</span>
+                        </label>
+                    </div>
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Merchant ID</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all"
+                                    value={click2payMerchantId}
+                                    onChange={(e) => setClick2payMerchantId(e.target.value)}
+                                    placeholder="Votre ID Marchand"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Clé API (Secret)</label>
+                                <input 
+                                    type="password" 
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50/30 transition-all"
+                                    value={click2payApiKey}
+                                    onChange={(e) => setClick2payApiKey(e.target.value)}
+                                    placeholder="••••••••••••••••"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-6 p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-start space-x-3">
+                            <LucideIcons.ShieldCheck size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
+                                <strong>Sécurité Click2pay :</strong> Vos identifiants sont chiffrés et utilisés uniquement pour traiter les transactions sécurisées via la plateforme Click2pay Tunisie.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-end pt-6 sticky bottom-0 bg-slate-50/80 backdrop-blur-md p-4 -mx-4 rounded-t-3xl border-t border-slate-200 z-10">
+                    <button 
+                        onClick={() => onUpdateSiteConfig({ 
+                            siteName, 
+                            logoUrl: siteLogo, 
+                            faviconUrl: siteFavicon,
+                            smtpMailerName,
+                            smtpHost,
+                            smtpDriver,
+                            smtpPort,
+                            smtpUsername,
+                            smtpEmailId,
+                            smtpEncryption,
+                            smtpPassword,
+                            click2payEnabled,
+                            click2payMerchantId,
+                            click2payApiKey
+                        })}
+                        className="bg-indigo-600 text-white font-black py-4 px-16 rounded-2xl hover:bg-indigo-700 transition shadow-2xl shadow-indigo-300 flex items-center justify-center transform hover:-translate-y-1 active:scale-95 group"
+                    >
+                        <LucideIcons.Save size={20} className="mr-3 group-hover:rotate-12 transition-transform" /> 
+                        <span className="uppercase tracking-widest text-sm">Sauvegarder tout</span>
+                    </button>
                 </div>
             </div>
         )}
@@ -1076,42 +1348,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         )}
         
         {activeTab === 'users' && user.role === UserRole.ADMIN && (
-             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                 <div className="px-6 py-4 border-b border-slate-100 font-bold bg-slate-50">Utilisateurs</div>
-                 <div className="overflow-x-auto">
-                     <table className="w-full text-left">
-                         <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
-                             <tr>
-                                 <th className="px-6 py-3">Utilisateur</th>
-                                 <th className="px-6 py-3">Email</th>
-                                 <th className="px-6 py-3">Rôle</th>
-                                 <th className="px-6 py-3">Solde</th>
-                                 <th className="px-6 py-3">Actions</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y divide-slate-100">
-                             {allUsers.map(u => (
-                                 <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                                     <td className="px-6 py-4 flex items-center space-x-3">
-                                         <img src={u.avatarUrl} className="w-8 h-8 rounded-full" />
-                                         <span className="font-bold text-slate-900">{u.username}</span>
-                                     </td>
-                                     <td className="px-6 py-4 text-sm text-slate-600">{u.email}</td>
-                                     <td className="px-6 py-4">
-                                         <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${u.role === UserRole.ADMIN ? 'bg-red-100 text-red-700' : u.role === UserRole.SUB_ADMIN ? 'bg-orange-100 text-orange-700' : u.role === UserRole.SELLER ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
-                                             {u.role}
-                                         </span>
-                                     </td>
-                                     <td className="px-6 py-4 font-bold text-slate-900 text-sm">{u.balance.toFixed(2)} TND</td>
-                                     <td className="px-6 py-4">
-                                         <button onClick={() => startEditingUser(u)} className="text-slate-400 hover:text-indigo-600"><Edit size={16} /></button>
-                                     </td>
-                                 </tr>
-                             ))}
-                         </tbody>
-                     </table>
-                 </div>
-             </div>
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-black text-slate-900">Gestion des Utilisateurs</h2>
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                        <button 
+                            onClick={() => setUserSubTab('all')}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${userSubTab === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Tous les Utilisateurs
+                        </button>
+                        <button 
+                            onClick={() => setUserSubTab('roles')}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${userSubTab === 'roles' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Rôles & Permissions
+                        </button>
+                    </div>
+                </div>
+
+                {userSubTab === 'all' ? (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 font-bold bg-slate-50">Liste des Utilisateurs</div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
+                                    <tr>
+                                        <th className="px-6 py-3">Utilisateur</th>
+                                        <th className="px-6 py-3">Email</th>
+                                        <th className="px-6 py-3">Rôle</th>
+                                        <th className="px-6 py-3">Solde</th>
+                                        <th className="px-6 py-3">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {allUsers.map(u => (
+                                        <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 flex items-center space-x-3">
+                                                <img src={u.avatarUrl} className="w-8 h-8 rounded-full" />
+                                                <span className="font-bold text-slate-900">{u.username}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-600">{u.email}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${u.role === UserRole.ADMIN ? 'bg-red-100 text-red-700' : u.role === UserRole.SUB_ADMIN ? 'bg-orange-100 text-orange-700' : u.role === UserRole.SELLER ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                                                    {u.role}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 text-sm">{u.balance.toFixed(2)} TND</td>
+                                            <td className="px-6 py-4">
+                                                <button onClick={() => startEditingUser(u)} className="text-slate-400 hover:text-indigo-600"><Edit size={16} /></button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {[UserRole.ADMIN, UserRole.SUB_ADMIN, UserRole.SELLER, UserRole.CLIENT].map(role => (
+                            <div key={role} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className={`p-3 rounded-xl ${role === UserRole.ADMIN ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                        <Shield size={24} />
+                                    </div>
+                                    <span className="text-2xl font-black text-slate-900">
+                                        {allUsers.filter(u => u.role === role).length}
+                                    </span>
+                                </div>
+                                <h3 className="font-bold text-slate-900 uppercase text-xs tracking-widest">{role}</h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                    {role === UserRole.ADMIN ? 'Accès total au système' : 
+                                     role === UserRole.SUB_ADMIN ? 'Gestion limitée' :
+                                     role === UserRole.SELLER ? 'Gestion des produits' : 'Utilisateur final'}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         )}
         {editingUser && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
@@ -1268,7 +1583,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                      <td className="px-6 py-4">
                                          <div className="flex space-x-2">
                                              <button 
-                                            onClick={() => startEditingUser(u)}
+                                            onClick={() => {}}
                                             className="text-slate-400 hover:text-indigo-600"
                                           >
                                             <Edit size={16} />
@@ -1289,44 +1604,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
 };
 
 // --- USER DASHBOARD ---
-export const UserDashboard: React.FC<{user: User, orders: Order[]}> = ({ user, orders }) => {
+export const UserDashboard: React.FC<{user: User, orders: Order[], navigateTo: (page: string) => void}> = ({ user, orders, navigateTo }) => {
   return (
-    <div className="flex flex-col md:flex-row gap-6">
-       <div className="w-full md:w-64 bg-white p-6 rounded-lg shadow text-center">
-          <img src={user.avatarUrl} className="w-20 h-20 rounded-full mx-auto mb-3" />
-          <h3 className="font-bold">{user.username}</h3>
-       </div>
-       <div className="flex-1 space-y-4">
-          <h2 className="font-bold text-2xl">Mes Commandes</h2>
-          {orders.map((o) => (
-             <div key={o.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex-1">
-                   <div className="text-xs font-bold text-indigo-600 uppercase mb-1">#{o.id.slice(0, 8)}</div>
-                   <h3 className="font-bold text-slate-900">{o.items?.[0]?.titleSnapshot || 'Commande'}</h3>
-                   <div className="text-xs text-slate-500 mt-1">{new Date(o.createdAt).toLocaleDateString()}</div>
-                </div>
-                
-                {o.items?.[0]?.deliveredContent && (
-                   <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 w-full md:w-auto">
-                       <div className="text-[10px] font-bold text-indigo-600 uppercase mb-1">Accès / Clé</div>
-                       <div className="text-sm font-mono font-bold text-slate-900 select-all">{o.items[0].deliveredContent}</div>
-                   </div>
-                )}
+    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center space-x-4">
+          <img src={user.avatarUrl || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-2 border-indigo-500 shadow-sm object-cover" />
+          <div>
+            <h1 className="text-2xl font-black text-slate-900">Bonjour, {user.username} !</h1>
+            <p className="text-sm text-slate-500">Gérez vos commandes et votre profil ici.</p>
+          </div>
+        </div>
+        <button 
+          onClick={() => navigateTo('profile')}
+          className="bg-white border border-slate-200 text-slate-900 font-bold px-6 py-3 rounded-xl hover:bg-slate-50 transition-all flex items-center shadow-sm"
+        >
+          <UserIcon size={18} className="mr-2 text-indigo-600" /> Modifier mon profil
+        </button>
+      </div>
 
-                <div className="text-right">
-                   <div className="font-black text-slate-900">{o.amount.toFixed(2)} TND</div>
-                   <div className={`text-[10px] font-bold uppercase px-2 py-1 rounded mt-1 inline-block ${o.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                       {o.status}
-                   </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-1 space-y-6">
+          <div className="bg-indigo-600 p-6 rounded-2xl shadow-lg text-white">
+            <div className="text-xs font-bold text-indigo-200 uppercase tracking-wider mb-1">Solde Actuel</div>
+            <div className="text-3xl font-black">{user.balance.toFixed(2)} TND</div>
+            <div className="mt-4 pt-4 border-t border-indigo-500 flex justify-between items-center">
+              <span className="text-xs text-indigo-100 italic">Prêt pour vos achats</span>
+              <button className="text-[10px] font-bold uppercase bg-white text-indigo-600 px-2 py-1 rounded">Recharger</button>
+            </div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h3 className="font-bold text-slate-900 mb-4 flex items-center">
+              <Clock size={18} className="mr-2 text-slate-400" /> Activité Récente
+            </h3>
+            <div className="space-y-4">
+              {orders.slice(0, 3).map(o => (
+                <div key={o.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500 mr-2"></div>
+                    <span className="text-slate-600 truncate max-w-[120px]">{o.items?.[0]?.titleSnapshot || 'Commande'}</span>
+                  </div>
+                  <span className="text-slate-400 text-xs">{new Date(o.createdAt).toLocaleDateString()}</span>
                 </div>
-             </div>
-          ))}
-          {orders.length === 0 && (
-              <div className="text-center py-20 bg-white rounded-xl border border-dashed border-slate-300 text-slate-400 italic">
-                  Vous n'avez pas encore passé de commande.
-              </div>
-          )}
-       </div>
+              ))}
+              {orders.length === 0 && <p className="text-xs text-slate-400 italic">Aucune activité récente.</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="md:col-span-2 space-y-4">
+          <h2 className="font-black text-xl text-slate-900 flex items-center">
+            <History size={20} className="mr-2 text-indigo-600" /> Historique des Commandes
+          </h2>
+          <div className="space-y-4">
+            {orders.map((o) => (
+               <div key={o.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md">
+                  <div className="flex-1">
+                     <div className="text-[10px] font-bold text-indigo-600 uppercase mb-1 tracking-widest">#{o.id.slice(0, 8)}</div>
+                     <h3 className="font-bold text-slate-900 text-lg">{o.items?.[0]?.titleSnapshot || 'Commande'}</h3>
+                     <div className="text-xs text-slate-500 mt-1 flex items-center">
+                       <Clock size={12} className="mr-1" /> {new Date(o.createdAt).toLocaleString()}
+                     </div>
+                  </div>
+                  
+                  {o.items?.[0]?.deliveredContent && (
+                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 w-full md:w-auto">
+                         <div className="text-[10px] font-bold text-indigo-600 uppercase mb-2 tracking-wider">Contenu Livré</div>
+                         <div className="text-sm font-mono font-bold text-slate-900 select-all break-all bg-white p-2 rounded border border-indigo-50 shadow-inner">
+                           {o.items[0].deliveredContent}
+                         </div>
+                     </div>
+                  )}
+
+                  <div className="text-right min-w-[100px]">
+                     <div className="font-black text-slate-900 text-lg">{o.amount.toFixed(2)} TND</div>
+                     <div className={`text-[10px] font-bold uppercase px-2 py-1 rounded mt-2 inline-block ${o.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                         {o.status}
+                     </div>
+                  </div>
+               </div>
+            ))}
+            {orders.length === 0 && (
+                <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300 text-slate-400 italic">
+                    Vous n'avez pas encore passé de commande.
+                </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

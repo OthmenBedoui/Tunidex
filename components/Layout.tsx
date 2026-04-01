@@ -125,15 +125,16 @@ const Layout: React.FC<LayoutProps> = ({
                       </div>
                    </button>
                    {isProfileOpen && (
-                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
-                        <div className="px-4 py-3 border-b border-slate-100">
-                          <p className="text-sm font-bold text-slate-900">{user.username}</p>
-                          <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
+                           <div className="px-4 py-3 border-b border-slate-100">
+                             <p className="text-sm font-bold text-slate-900">{user.username}</p>
+                             <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                           </div>
+                           <button onClick={() => { navigateTo('profile'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"><UserIcon size={16} className="mr-2" /> Mon Profil</button>
+                           {(user.role === UserRole.ADMIN || user.role === UserRole.SUB_ADMIN || user.role === UserRole.SELLER) && <button onClick={() => { navigateTo('admin-dashboard'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"><LayoutDashboard size={16} className="mr-2" /> Admin Panel</button>}
+                           {user.role === UserRole.CLIENT && <button onClick={() => { navigateTo('user-dashboard'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"><LucideIcons.History size={16} className="mr-2" /> Mes Commandes</button>}
+                           <button onClick={() => { onLogout(); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 flex items-center"><LogOut size={16} className="mr-2" /> Déconnexion</button>
                         </div>
-                        {(user.role === UserRole.ADMIN || user.role === UserRole.SUB_ADMIN || user.role === UserRole.SELLER) && <button onClick={() => { navigateTo('admin-dashboard'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"><LayoutDashboard size={16} className="mr-2" /> Admin Panel</button>}
-                        {user.role === UserRole.CLIENT && <button onClick={() => { navigateTo('user-dashboard'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"><UserIcon size={16} className="mr-2" /> Mon Profil</button>}
-                        <button onClick={() => { onLogout(); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 flex items-center"><LogOut size={16} className="mr-2" /> Déconnexion</button>
-                     </div>
                    )}
                 </div>
               )}
