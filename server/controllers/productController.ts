@@ -41,10 +41,19 @@ export const getListings = async (_req: Request, res: Response) => {
  *         description: Listing created
  */
 export const createListing = async (req: Request, res: Response) => {
-  const { metaTitle, metaDesc, keywords, ...data } = req.body;
+  const { metaTitle, metaDesc, keywords, gallery, ...data } = req.body;
   if (!prisma?.listing) return res.status(500).json({ error: 'Prisma not initialized' });
   const listing = await prisma.listing.create({
-    data: { ...data, metaTitle, metaDesc, keywords, stock: Number(data.stock), price: Number(data.price), deliveryTimeHours: Number(data.deliveryTimeHours) }
+    data: { 
+      ...data, 
+      metaTitle, 
+      metaDesc, 
+      keywords, 
+      gallery: Array.isArray(gallery) ? JSON.stringify(gallery) : (gallery || '[]'),
+      stock: Number(data.stock), 
+      price: Number(data.price), 
+      deliveryTimeHours: Number(data.deliveryTimeHours) 
+    }
   });
   res.json(listing);
 };
