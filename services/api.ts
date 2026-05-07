@@ -31,6 +31,11 @@ const getHeaders = () => {
   };
 };
 
+const getAuthHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export const api = {
   // Auth
   login: (email: string, password: string) => fetchWithFallback(`${API_URL}/auth/login`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email, password}) }),
@@ -48,7 +53,7 @@ export const api = {
 
   // Cart & Checkout
   getCart: () => fetchWithFallback<CartItem[]>(`${API_URL}/cart`, { headers: getHeaders() }, []),
-  addToCart: (listingId: string) => fetchWithFallback(`${API_URL}/cart`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({listingId}) }),
+  addToCart: (listingId: string, variantId?: string) => fetchWithFallback(`${API_URL}/cart`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({listingId, variantId}) }),
   removeFromCart: (itemId: string) => fetchWithFallback(`${API_URL}/cart/${itemId}`, { method: 'DELETE', headers: getHeaders() }),
   checkout: (data?: { paymentMethod?: string; phone?: string }) => fetchWithFallback<Order>(`${API_URL}/checkout`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(data || {}) }),
   guestCheckout: (data: GuestCheckoutPayload) => fetchWithFallback<Order>(`${API_URL}/checkout/guest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
@@ -85,6 +90,19 @@ export const api = {
 
   // Analytics
   getDailyStats: () => fetchWithFallback<{ dailyStats: { date: string, sales: number, orders: number }[], totalSales: number, totalOrders: number, totalUsers: number, topProducts: Listing[] }>(`${API_URL}/admin/stats`, { headers: getHeaders() }, { dailyStats: [], totalSales: 0, totalOrders: 0, totalUsers: 0, topProducts: [] }),
+  exportSiteData: async () => {
+    const res = await fetch(`${API_URL}/admin/data/export`, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error(res.statusText);
+    return res.blob();
+  },
+  importSiteData: (fileBase64: string) => fetchWithFallback<{ success: boolean; categoriesImported: number; subCategoriesImported: number; productsImported: number }>(
+    `${API_URL}/admin/data/import`,
+    { method: 'POST', headers: getHeaders(), body: JSON.stringify({ fileBase64 }) }
+  ),
+  cleanSiteData: (table: string, confirmation: string) => fetchWithFallback<{ success: boolean; table: string; before: Record<string, number>; after: Record<string, number> }>(
+    `${API_URL}/admin/data/clean`,
+    { method: 'POST', headers: getHeaders(), body: JSON.stringify({ table, confirmation }) }
+  ),
 
   // AI
   generateDescription: (game: string, itemType: string, keyFeatures: string) => 

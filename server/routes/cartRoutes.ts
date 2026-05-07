@@ -7,12 +7,10 @@ const router = express.Router();
 
 router.post('/checkout/guest', guestCheckout);
 
-router.use(authenticate); // Apply auth to protected cart routes only
-
-router.get('/cart', getCart);
-router.post('/cart', addToCart);
-router.delete('/cart/:itemId', removeFromCart);
-router.post('/checkout', checkout);
-router.get('/orders/my', getMyOrders);
+router.get('/cart', authenticate, getCart);
+router.post('/cart', authenticate, addToCart);
+router.delete('/cart/:itemId', authenticate, removeFromCart);
+router.post('/checkout', authenticate, checkout);
+router.get('/orders/my', authenticate, getMyOrders);
 
 export default router;

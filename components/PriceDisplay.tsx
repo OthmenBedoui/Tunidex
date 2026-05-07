@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tag } from 'lucide-react';
 import { Listing } from '../types';
-import { getListingDiscountLabel, getListingFinalPrice, hasListingDiscount } from '../utils/pricing';
+import { getListingDiscountLabel, getListingDisplayPrice, hasListingDiscount, hasListingVariants } from '../utils/pricing';
 
 interface PriceDisplayProps {
   listing: Listing;
@@ -19,10 +19,12 @@ const PriceDisplay: React.FC<PriceDisplayProps> = ({
   suffixClassName = 'text-xs font-normal text-slate-500'
 }) => {
   const discounted = hasListingDiscount(listing);
+  const hasVariants = hasListingVariants(listing);
+  const displayPrice = getListingDisplayPrice(listing);
 
   return (
     <div>
-      {discounted && (
+      {discounted && !hasVariants && (
         <div className="mb-1 flex items-center gap-2 flex-wrap">
           <span className={oldPriceClassName}>{listing.price.toFixed(2)} TND</span>
           <span className={badgeClassName}>
@@ -32,7 +34,8 @@ const PriceDisplay: React.FC<PriceDisplayProps> = ({
         </div>
       )}
       <div className={priceClassName}>
-        {getListingFinalPrice(listing).toFixed(2)} <span className={suffixClassName}>TND</span>
+        {hasVariants && <span className={suffixClassName}>À partir de </span>}
+        {displayPrice.toFixed(2)} <span className={suffixClassName}>TND</span>
       </div>
     </div>
   );

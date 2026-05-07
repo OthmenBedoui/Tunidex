@@ -212,3 +212,47 @@ export const getMe = async (req: Request & { user?: { id: string; role: string }
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(sanitizeUser(user));
 };
+
+export const updateProfile = async (req: Request & { user?: { id: string } }, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'No token' });
+
+  const { username, email, avatarUrl, password } = req.body;
+  const data: {
+    username?: string;
+    email?: string;
+    avatarUrl?: string;
+    password?: string;
+  } = {};
+
+  if (typeof username === 'string' && username.trim()) data.username = username.trim();
+  if (typeof email === 'string' && email.trim()) data.email = email.trim().toLowerCase();
+  if (typeof avatarUrl === 'string') data.avatarUrl = avatarUrl;
+  if (typeof password === 'string' && password.length > 0) data.password = await bcrypt.hash(password, 10);
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data
+  });
+
+  res.json(sanitizeUser(updatedUser));
+};
+
+export const updateSubscription = async (req: Request & { user?: { id: string } }, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'No token' });
+
+  const { tier, fullName, address, phone, paymentMethod } = req.body;
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      subscriptionTier: tier || 'Free',
+      fullName: fullName || null,
+      address: address || null,
+      phone: phone || null,
+      paymentMethod: paymentMethod || null
+    }
+  });
+
+  res.json(sanitizeUser(updatedUser));
+};

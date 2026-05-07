@@ -1,8 +1,7 @@
 import nodemailer from 'nodemailer';
-import { promises as fs } from 'fs';
-import path from 'path';
+import prisma from '../prisma.js';
 
-const siteConfigPath = path.join(process.cwd(), 'server', 'data', 'site-config.json');
+const SITE_CONFIG_KEY = 'site';
 
 const fallbackTransport = {
     host: "smtp.ethereal.email",
@@ -14,8 +13,17 @@ const fallbackTransport = {
 
 const readMailerConfig = async () => {
     try {
-        const raw = await fs.readFile(siteConfigPath, 'utf8');
-        const config = JSON.parse(raw);
+        const record = await prisma.siteConfig.findUnique({ where: { key: SITE_CONFIG_KEY } });
+        const config = record?.data as {
+            smtpHost?: string;
+            smtpPort?: string;
+            smtpEmailId?: string;
+            smtpEncryption?: string;
+            smtpUsername?: string;
+            smtpPassword?: string;
+            smtpMailerName?: string;
+        } | undefined;
+
         if (config?.smtpHost && config?.smtpPort && config?.smtpEmailId) {
             return {
                 host: config.smtpHost,

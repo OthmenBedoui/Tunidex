@@ -18,6 +18,149 @@ const normalizeDiscountAmount = (value: unknown, price: number) => {
   return Math.max(0, Math.min(price, parsed));
 };
 
+const normalizePackageItems = (value: unknown) => {
+  if (!Array.isArray(value)) return [];
+
+  const aggregated = new Map<string, number>();
+
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+
+    const includedListingId = typeof (item as { includedListingId?: unknown }).includedListingId === 'string'
+      ? (item as { includedListingId: string }).includedListingId.trim()
+      : '';
+    const quantity = Number((item as { quantity?: unknown }).quantity);
+
+    if (!includedListingId) continue;
+    if (!Number.isInteger(quantity) || quantity <= 0) continue;
+
+    aggregated.set(includedListingId, (aggregated.get(includedListingId) || 0) + quantity);
+  }
+
+  return Array.from(aggregated.entries()).map(([includedListingId, quantity]) => ({
+    includedListingId,
+    quantity
+  }));
+};
+
+const normalizeVariants = (value: unknown) => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((variant, index) => {
+      if (!variant || typeof variant !== 'object') return null;
+      const name = typeof (variant as { name?: unknown }).name === 'string'
+        ? (variant as { name: string }).name.trim()
+        : '';
+      const price = Number((variant as { price?: unknown }).price);
+      const order = Number((variant as { order?: unknown }).order);
+
+      if (!name || !Number.isFinite(price) || price < 0) return null;
+
+      return {
+        name,
+        price,
+        order: Number.isInteger(order) ? order : index + 1
+      };
+    })
+    .filter((variant): variant is { name: string; price: number; order: number } => Boolean(variant));
+};
+
+const computePackageStock = (packageItems: Array<{ quantity: number; includedListing: { stock: number } }>) => {
+  if (packageItems.length === 0) return 0;
+
+  return packageItems.reduce((minStock, item) => {
+    const availableUnits = Math.floor((item.includedListing.stock || 0) / item.quantity);
+    return Math.min(minStock, availableUnits);
+  }, Number.POSITIVE_INFINITY);
+};
+
+const serializeNestedListing = (listing: {
+  gallery: string | null;
+  stock: number;
+  [key: string]: unknown;
+}) => ({
+  ...listing,
+  gallery: JSON.parse(listing.gallery || '[]')
+});
+
+const serializeListing = (listing: {
+  gallery: string | null;
+  isPackage?: boolean | null;
+  packageItems?: Array<{
+    id: string;
+    packageListingId: string;
+    includedListingId: string;
+    quantity: number;
+    includedListing: {
+      gallery: string | null;
+      stock: number;
+      [key: string]: unknown;
+    };
+  }>;
+  [key: string]: unknown;
+}) => {
+  const serializedPackageItems = Array.isArray(listing.packageItems)
+    ? listing.packageItems.map((item) => ({
+        ...item,
+        includedListing: serializeNestedListing(item.includedListing)
+      }))
+    : [];
+
+  return {
+    ...listing,
+    gallery: JSON.parse(listing.gallery || '[]'),
+    stock: listing.isPackage ? computePackageStock(serializedPackageItems) : listing.stock,
+    packageItems: serializedPackageItems
+  };
+};
+
+const getListingInclude = () => ({
+  category: true,
+  subCategory: true,
+  variants: {
+    orderBy: [{ order: 'asc' as const }, { price: 'asc' as const }]
+  },
+  packageItems: {
+    include: {
+      includedListing: {
+        include: {
+          category: true,
+          subCategory: true
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'asc' as const
+    }
+  }
+});
+
+const validatePackageItems = async (listingId: string | null, packageItems: Array<{ includedListingId: string; quantity: number }>) => {
+  if (packageItems.length === 0) {
+    throw new Error('Un package doit contenir au moins un produit.');
+  }
+
+  if (listingId && packageItems.some((item) => item.includedListingId === listingId)) {
+    throw new Error('Un package ne peut pas se contenir lui-même.');
+  }
+
+  const includedListings = await prisma.listing.findMany({
+    where: {
+      id: { in: packageItems.map((item) => item.includedListingId) },
+      isArchived: false,
+      isPackage: false
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (includedListings.length !== packageItems.length) {
+    throw new Error('Chaque package doit contenir des produits existants et non archivés.');
+  }
+};
+
 /**
  * @swagger
  * tags:
@@ -46,8 +189,11 @@ const normalizeDiscountAmount = (value: unknown, price: number) => {
  *                 $ref: '#/components/schemas/Listing'
  */
 export const getListings = async (_req: Request, res: Response) => {
-  const listings = await prisma.listing.findMany({ include: { category: true, subCategory: true }, orderBy: { createdAt: 'desc' } });
-  res.json(listings.map((l: { gallery: string | null }) => ({ ...l, gallery: JSON.parse(l.gallery || '[]') })));
+  const listings = await prisma.listing.findMany({
+    include: getListingInclude(),
+    orderBy: { createdAt: 'desc' }
+  });
+  res.json(listings.map(serializeListing));
 };
 
 /**
@@ -80,22 +226,29 @@ export const createListing = async (req: Request, res: Response) => {
     subCategoryId,
     description,
     price,
+    variantLabel,
     discountPercent,
     discountType,
     discountValue,
     imageUrl,
     logoUrl,
     stock,
+    isPackage,
+    packageItems,
     deliveryTimeHours,
     metaTitle,
     metaDesc,
     keywords,
     gallery,
     isInstant,
-    preparationTime
+    preparationTime,
+    variants
   } = req.body;
 
   const numericPrice = Number(price);
+  const normalizedPackageItems = normalizePackageItems(packageItems);
+  const normalizedVariants = normalizeVariants(variants);
+  const nextIsPackage = Boolean(isPackage);
   const normalizedDiscountType = normalizeDiscountType(discountType);
   const normalizedDiscountValue =
     normalizedDiscountType === 'PERCENT'
@@ -103,6 +256,10 @@ export const createListing = async (req: Request, res: Response) => {
       : normalizedDiscountType === 'AMOUNT'
         ? normalizeDiscountAmount(discountValue, numericPrice)
         : 0;
+
+  if (nextIsPackage) {
+    await validatePackageItems(null, normalizedPackageItems);
+  }
 
   const listing = await prisma.listing.create({
     data: {
@@ -112,12 +269,14 @@ export const createListing = async (req: Request, res: Response) => {
       subCategoryId: subCategoryId || null,
       description,
       price: numericPrice,
+      isPackage: nextIsPackage,
+      variantLabel: nextIsPackage ? null : (typeof variantLabel === 'string' && variantLabel.trim() ? variantLabel.trim() : null),
       discountPercent: normalizedDiscountType === 'PERCENT' ? normalizeDiscountPercent(discountValue ?? discountPercent) : 0,
       discountType: normalizedDiscountType,
       discountValue: normalizedDiscountValue,
       imageUrl,
       logoUrl: logoUrl || null,
-      stock: Number(stock),
+      stock: nextIsPackage ? 0 : Number(stock),
       deliveryTimeHours: Number(deliveryTimeHours),
       metaTitle,
       metaDesc,
@@ -125,9 +284,23 @@ export const createListing = async (req: Request, res: Response) => {
       isInstant: isInstant === undefined ? true : Boolean(isInstant),
       preparationTime: preparationTime || null,
       gallery: Array.isArray(gallery) ? JSON.stringify(gallery) : (gallery || '[]'),
-    }
+      packageItems: nextIsPackage
+        ? {
+            create: normalizedPackageItems.map((item) => ({
+              includedListingId: item.includedListingId,
+              quantity: item.quantity
+            }))
+          }
+        : undefined,
+      variants: !nextIsPackage && normalizedVariants.length > 0
+        ? {
+            create: normalizedVariants
+          }
+        : undefined,
+    },
+    include: getListingInclude()
   });
-  res.json({ ...listing, gallery: JSON.parse(listing.gallery || '[]') });
+  res.json(serializeListing(listing));
 };
 
 /**
@@ -152,6 +325,13 @@ export const deleteListing = async (req: Request, res: Response) => {
   const listingId = req.params.id;
 
   try {
+    const packageUsageCount = await prisma.packageItem.count({ where: { includedListingId: listingId } });
+    if (packageUsageCount > 0) {
+      return res.status(400).json({
+        error: 'Suppression impossible: ce produit est utilise dans un package existant.'
+      });
+    }
+
     const orderItemsCount = await prisma.orderItem.count({ where: { listingId } });
     if (orderItemsCount > 0) {
       const archivedListing = await prisma.listing.update({
@@ -163,12 +343,13 @@ export const deleteListing = async (req: Request, res: Response) => {
         success: true,
         archived: true,
         message: "Produit archive. L'historique des commandes est conserve.",
-        listing: { ...archivedListing, gallery: JSON.parse(archivedListing.gallery || '[]') }
+        listing: serializeListing(archivedListing)
       });
     }
 
     await prisma.$transaction(async (tx) => {
       await tx.cartItem.deleteMany({ where: { listingId } });
+      await tx.packageItem.deleteMany({ where: { packageListingId: listingId } });
       await tx.listing.deleteMany({ where: { id: listingId } });
     });
 
@@ -221,22 +402,29 @@ export const updateListing = async (req: Request, res: Response) => {
     subCategoryId,
     description,
     price,
+    variantLabel,
     discountPercent,
     discountType,
     discountValue,
     imageUrl,
     logoUrl,
     stock,
+    isPackage,
+    packageItems,
     deliveryTimeHours,
     metaTitle,
     metaDesc,
     keywords,
     gallery,
     isInstant,
-    preparationTime
+    preparationTime,
+    variants
   } = req.body;
 
   const numericPrice = Number(price);
+  const normalizedPackageItems = normalizePackageItems(packageItems);
+  const normalizedVariants = normalizeVariants(variants);
+  const nextIsPackage = Boolean(isPackage);
   const normalizedDiscountType = normalizeDiscountType(discountType);
   const normalizedDiscountValue =
     normalizedDiscountType === 'PERCENT'
@@ -244,6 +432,10 @@ export const updateListing = async (req: Request, res: Response) => {
       : normalizedDiscountType === 'AMOUNT'
         ? normalizeDiscountAmount(discountValue, numericPrice)
         : 0;
+
+  if (nextIsPackage) {
+    await validatePackageItems(id, normalizedPackageItems);
+  }
 
   const listing = await prisma.listing.update({
     where: { id },
@@ -254,12 +446,14 @@ export const updateListing = async (req: Request, res: Response) => {
       subCategoryId: subCategoryId || null,
       description,
       price: numericPrice,
+      isPackage: nextIsPackage,
+      variantLabel: nextIsPackage ? null : (typeof variantLabel === 'string' && variantLabel.trim() ? variantLabel.trim() : null),
       discountPercent: normalizedDiscountType === 'PERCENT' ? normalizeDiscountPercent(discountValue ?? discountPercent) : 0,
       discountType: normalizedDiscountType,
       discountValue: normalizedDiscountValue,
       imageUrl,
       logoUrl: logoUrl || null,
-      stock: Number(stock),
+      stock: nextIsPackage ? 0 : Number(stock),
       deliveryTimeHours: Number(deliveryTimeHours),
       metaTitle,
       metaDesc,
@@ -267,10 +461,30 @@ export const updateListing = async (req: Request, res: Response) => {
       isInstant: isInstant === undefined ? true : Boolean(isInstant),
       preparationTime: preparationTime || null,
       gallery: Array.isArray(gallery) ? JSON.stringify(gallery) : (gallery || '[]'),
-    }
+      packageItems: {
+        deleteMany: {},
+        ...(nextIsPackage
+          ? {
+              create: normalizedPackageItems.map((item) => ({
+                includedListingId: item.includedListingId,
+                quantity: item.quantity
+              }))
+            }
+          : {})
+      },
+      variants: {
+        deleteMany: {},
+        ...(!nextIsPackage && normalizedVariants.length > 0
+          ? {
+              create: normalizedVariants
+            }
+          : {})
+      }
+    },
+    include: getListingInclude()
   });
 
-  res.json({ ...listing, gallery: JSON.parse(listing.gallery || '[]') });
+  res.json(serializeListing(listing));
 };
 
 // --- CATEGORIES ---
@@ -293,7 +507,8 @@ export const updateListing = async (req: Request, res: Response) => {
  */
 export const getCategories = async (_req: Request, res: Response) => { 
     res.json(await prisma.category.findMany({ 
-        include: { subCategories: { orderBy: { order: 'asc' } } } 
+        include: { subCategories: { orderBy: { order: 'asc' } } },
+        orderBy: [{ order: 'asc' }, { name: 'asc' }]
     })); 
 };
 
@@ -316,7 +531,18 @@ export const getCategories = async (_req: Request, res: Response) => {
  *         description: Category created
  */
 export const createCategory = async (req: Request, res: Response) => { 
-    res.json(await prisma.category.create({ data: req.body })); 
+    const { name, slug, icon, imageUrl, gradient, description, order } = req.body;
+    res.json(await prisma.category.create({
+        data: {
+            name,
+            slug,
+            icon,
+            imageUrl,
+            gradient,
+            description,
+            order: order ? Number(order) : 0
+        }
+    })); 
 };
 
 /**
@@ -339,7 +565,19 @@ export const createCategory = async (req: Request, res: Response) => {
  */
 export const updateCategory = async (req: Request, res: Response) => {
     const { id } = req.params;
-    res.json(await prisma.category.update({ where: { id }, data: req.body }));
+    const { name, slug, icon, imageUrl, gradient, description, order } = req.body;
+    res.json(await prisma.category.update({
+        where: { id },
+        data: {
+            name,
+            slug,
+            icon,
+            imageUrl,
+            gradient,
+            description,
+            order: order !== undefined ? Number(order) : undefined
+        }
+    }));
 };
 
 /**

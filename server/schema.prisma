@@ -40,6 +40,13 @@ model Sequence {
   updatedAt DateTime @updatedAt
 }
 
+model SiteConfig {
+  key       String   @id
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Category {
   id            String        @id @default(uuid())
   name          String
@@ -48,6 +55,7 @@ model Category {
   imageUrl      String?
   gradient      String?
   description   String?
+  order         Int           @default(0)
   subCategories SubCategory[]
   listings      Listing[]
 }
@@ -70,6 +78,8 @@ model Listing {
   description       String
   price             Float
   isArchived        Boolean      @default(false)
+  isPackage         Boolean      @default(false)
+  variantLabel      String?
   discountPercent   Int          @default(0)
   discountType      String       @default("NONE")
   discountValue     Float        @default(0)
@@ -93,6 +103,34 @@ model Listing {
   updatedAt         DateTime     @updatedAt
   cartItems         CartItem[]
   orderItems        OrderItem[]
+  packageItems      PackageItem[] @relation("PackageComposition")
+  includedInPackages PackageItem[] @relation("PackageComponent")
+  variants          ProductVariant[]
+}
+
+model ProductVariant {
+  id        String   @id @default(uuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  name      String
+  price     Float
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cartItems CartItem[]
+}
+
+model PackageItem {
+  id                String   @id @default(uuid())
+  packageListingId  String
+  includedListingId String
+  quantity          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  packageListing    Listing  @relation("PackageComposition", fields: [packageListingId], references: [id], onDelete: Cascade)
+  includedListing   Listing  @relation("PackageComponent", fields: [includedListingId], references: [id], onDelete: Restrict)
+
+  @@unique([packageListingId, includedListingId])
 }
 
 model Cart {
@@ -110,6 +148,8 @@ model CartItem {
   cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
   listingId String
   listing   Listing  @relation(fields: [listingId], references: [id])
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   quantity  Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -147,9 +187,11 @@ model OrderItem {
   order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   listingId     String
   listing       Listing       @relation(fields: [listingId], references: [id])
+  variantId     String?
   quantity      Int
   priceSnapshot Float
   titleSnapshot String
+  variantSnapshot String?
   invoiceItems  InvoiceItem[]
 }
 
@@ -182,6 +224,7 @@ model InvoiceItem {
   orderItemId   String?
   orderItem     OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
   listingId     String?
+  variantSnapshot String?
   quantity      Int
   unitPrice     Float
   lineTotal     Float

@@ -2,6 +2,7 @@ import prisma from '../prisma.js';
 
 type CheckoutItemInput = {
   listingId: string;
+  variantId?: string;
   quantity: number;
 };
 
@@ -18,6 +19,8 @@ export type GuestCheckoutInput = {
 
 type CheckoutLine = {
   listingId: string;
+  variantId?: string;
+  variantSnapshot?: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -50,6 +53,7 @@ export const validateGuestCheckoutInput = (input: GuestCheckoutInput) => {
     .filter((item) => item && typeof item.listingId === 'string')
     .map((item) => ({
       listingId: item.listingId.trim(),
+      variantId: typeof item.variantId === 'string' ? item.variantId.trim() : undefined,
       quantity: Number(item.quantity || 0)
     }))
     .filter((item) => item.listingId && Number.isInteger(item.quantity) && item.quantity > 0);
@@ -102,7 +106,8 @@ const formatDocumentNumber = (prefix: string, year: number, value: number) => `$
 const buildCheckoutLines = async (items: CheckoutItemInput[]): Promise<CheckoutLine[]> => {
   const listingIds = [...new Set(items.map((item) => item.listingId))];
   const listings = await prisma.listing.findMany({
-    where: { id: { in: listingIds }, isArchived: false }
+    where: { id: { in: listingIds }, isArchived: false },
+    include: { variants: true }
   });
 
   const listingMap = new Map(listings.map((listing) => [listing.id, listing]));
@@ -112,13 +117,20 @@ const buildCheckoutLines = async (items: CheckoutItemInput[]): Promise<CheckoutL
     if (!listing) {
       throw new Error('Un ou plusieurs produits du panier sont introuvables.');
     }
-    const unitPrice = getListingFinalPrice(listing);
+    const variant = item.variantId ? listing.variants.find((entry) => entry.id === item.variantId) : null;
+    if (listing.variants.length > 0 && !variant) {
+      throw new Error('Une variante doit être sélectionnée pour un ou plusieurs produits.');
+    }
+    const unitPrice = variant ? variant.price : getListingFinalPrice(listing);
+    const variantSnapshot = variant?.name;
     return {
       listingId: listing.id,
+      variantId: variant?.id,
+      variantSnapshot,
       quantity: item.quantity,
       unitPrice,
       lineTotal: unitPrice * item.quantity,
-      titleSnapshot: listing.title
+      titleSnapshot: variantSnapshot ? `${listing.title} - ${variantSnapshot}` : listing.title
     };
   });
 };
@@ -152,16 +164,18 @@ export const createCheckoutOrder = async (rawInput: GuestCheckoutInput) => {
         items: {
           create: lines.map((line) => ({
             listingId: line.listingId,
+            variantId: line.variantId,
             quantity: line.quantity,
             priceSnapshot: line.unitPrice,
-            titleSnapshot: line.titleSnapshot
+            titleSnapshot: line.titleSnapshot,
+            variantSnapshot: line.variantSnapshot
           }))
         }
       },
       include: { items: true }
     });
 
-    const orderItemsByListingId = new Map(createdOrder.items.map((item) => [item.listingId, item]));
+    const orderItemsByLineKey = new Map(createdOrder.items.map((item) => [`${item.listingId}:${item.variantId || ''}`, item]));
 
     const invoice = await tx.invoice.create({
       data: {
@@ -178,8 +192,9 @@ export const createCheckoutOrder = async (rawInput: GuestCheckoutInput) => {
         totalAmount,
         items: {
           create: lines.map((line) => ({
-            orderItemId: orderItemsByListingId.get(line.listingId)?.id,
+            orderItemId: orderItemsByLineKey.get(`${line.listingId}:${line.variantId || ''}`)?.id,
             listingId: line.listingId,
+            variantSnapshot: line.variantSnapshot,
             quantity: line.quantity,
             unitPrice: line.unitPrice,
             lineTotal: line.lineTotal,

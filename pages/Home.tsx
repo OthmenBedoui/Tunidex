@@ -3,7 +3,7 @@ import React from 'react';
 import { Listing, Category, SiteConfig } from '../types';
 import { ArrowRight, ChevronLeft, ChevronRight, Zap, Star, Shield, Tag } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { getListingDiscountLabel, getListingFinalPrice, hasListingDiscount } from '../utils/pricing';
+import { getListingDiscountLabel, getListingFinalPrice, getPackageSavings, hasListingDiscount, hasPackageSavings } from '../utils/pricing';
 import PriceDisplay from '../components/PriceDisplay';
 
 interface HomeProps {
@@ -20,6 +20,98 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
   return <IconComponent size={24} className={className} />;
 };
 
+const isVideoMedia = (src?: string, mediaType?: 'image' | 'video') => {
+  if (mediaType === 'video') return true;
+  if (!src) return false;
+  return src.startsWith('data:video/') || /\.(mp4|webm)(\?|#|$)/i.test(src);
+};
+
+const fallbackHeroImages = [
+  'https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1635776062127-d379bfcba9f8?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1522869635100-1f4d0684d91f?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&q=80',
+];
+
+const HeroOrbitSection: React.FC<{
+  listings: Listing[];
+  categories: Category[];
+  onViewProduct: (listing: Listing) => void;
+}> = ({ listings, categories, onViewProduct }) => {
+  const visualItems = listings.length > 0
+    ? listings.slice(0, 9).map((listing) => ({
+        id: listing.id,
+        title: listing.title,
+        imageUrl: listing.imageUrl,
+        listing,
+      }))
+    : fallbackHeroImages.map((imageUrl, index) => ({
+        id: `fallback-${index}`,
+        title: categories[index % Math.max(categories.length, 1)]?.name || 'Tunidex',
+        imageUrl,
+        listing: undefined,
+      }));
+
+  const rings = [0, 1, 2].map((ringIndex) =>
+    Array.from({ length: 9 }, (_, index) => visualItems[(index + ringIndex * 3) % visualItems.length])
+  );
+
+  return (
+    <section className="section_hero_tunidex">
+      <div className="hero_orbit_bg" />
+      <div className="hero_orbit_content">
+        <div className="hero_orbit_badge">Marketplace digitale premium</div>
+        <h1 className="hero_orbit_title">
+          Achetez plus vite avec<br />
+          <span>comptes, abonnements et services digitaux</span>
+        </h1>
+        <p className="hero_orbit_text">
+          Une expérience store plus fluide pour trouver vos produits, choisir vos variantes et recevoir vos accès avec un parcours clair.
+        </p>
+        <div className="hero_orbit_actions">
+          <button type="button" onClick={() => document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })} className="hero_orbit_button">
+            Explorer le store
+          </button>
+          <button
+            type="button"
+            onClick={() => visualItems[0]?.listing && onViewProduct(visualItems[0].listing)}
+            className="hero_orbit_arrow"
+          >
+            <span>Voir produits</span>
+            <ArrowRight size={20} />
+          </button>
+        </div>
+      </div>
+
+      <div className="hero_3d_visual" aria-hidden="true">
+        <div className="hero_3d_wrap">
+          {rings.map((ring, ringIndex) => (
+            <div key={ringIndex} className={`hero_3d_group hero_3d_group_${ringIndex + 1}`}>
+              {ring.map((item, index) => (
+                <div key={`${item.id}-${ringIndex}-${index}`} className="hero_3d_card" style={{ ['--item-index' as string]: index }}>
+                  <img src={item.imageUrl} alt="" className="hero_3d_image" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="hero_orbit_rating">
+        <div>Rated 4.9/5 by Tunidex clients</div>
+        <div className="hero_orbit_stars">
+          {[...Array(5)].map((_, index) => <Star key={index} size={15} fill="currentColor" />)}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const HorizontalListingCard: React.FC<{ listing: Listing; onViewProduct: (listing: Listing) => void }> = ({ listing, onViewProduct }) => {
   const hasDiscount = hasListingDiscount(listing);
   const discountedPrice = getListingFinalPrice(listing);
@@ -30,6 +122,11 @@ const HorizontalListingCard: React.FC<{ listing: Listing; onViewProduct: (listin
       <div className="relative h-48 overflow-hidden bg-slate-100">
         <img src={listing.imageUrl} alt={listing.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md font-bold uppercase tracking-wider">{listing.game}</div>
+        {listing.isPackage && (
+          <div className="absolute left-3 top-12 rounded-full bg-indigo-600 px-3 py-1 text-[11px] font-black text-white shadow-lg">
+            Package
+          </div>
+        )}
         {listing.isInstant && (
           <div className="absolute top-3 right-3 bg-green-500/90 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md font-bold flex items-center shadow-sm">
             <Zap size={10} className="mr-1 fill-current" /> Instant
@@ -43,6 +140,11 @@ const HorizontalListingCard: React.FC<{ listing: Listing; onViewProduct: (listin
         {listing.logoUrl && <img src={listing.logoUrl} alt={`${listing.game || listing.title} logo`} className="absolute bottom-2 right-2 w-8 h-8 rounded bg-white p-1 shadow-sm" />}
       </div>
       <div className="p-5 flex-1 flex flex-col">
+        {listing.isPackage && hasPackageSavings(listing) && (
+          <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+            Gain client: {getPackageSavings(listing).toFixed(2)} TND
+          </div>
+        )}
         <div className="flex items-center space-x-1 mb-2">
           <div className="flex text-yellow-400">
             {[...Array(5)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
@@ -108,6 +210,7 @@ const ProductRailSection: React.FC<{
 };
 
 const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, navigateTo, siteConfig }) => {
+  const packageListings = listings.filter((listing) => listing.isPackage);
   const featuredListings = listings.slice(0, 12);
   const discountedListings = listings
     .filter((listing) => hasListingDiscount(listing))
@@ -158,18 +261,31 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
 
   return (
     <div className="space-y-16 animate-in fade-in duration-500">
+      <HeroOrbitSection listings={featuredListings} categories={categories} onViewProduct={onViewProduct} />
+
       {/* Hero Section */}
-      <div className="relative rounded-3xl overflow-hidden bg-slate-900 shadow-2xl">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-40 transition-all duration-700"
-          style={{
-            backgroundImage: `url('${activeSlide?.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'}')`,
-          }}
-        ></div>
+      <div className="relative rounded-3xl overflow-hidden bg-slate-900 shadow-2xl" style={{ height: `${siteConfig.heroSlideHeight || 440}px` }}>
+        {isVideoMedia(activeSlide?.imageUrl, activeSlide?.mediaType) ? (
+          <video
+            key={activeSlide?.imageUrl}
+            className="absolute inset-0 h-full w-full object-cover opacity-45 transition-all duration-700"
+            src={activeSlide?.imageUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
+        ) : (
+          <img
+            className="absolute inset-0 h-full w-full object-cover opacity-40 transition-all duration-700"
+            src={activeSlide?.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'}
+            alt=""
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent"></div>
         
-        <div className="relative px-8 md:px-16 max-w-4xl flex items-center" style={{ minHeight: `${siteConfig.heroSlideHeight || 440}px` }}>
-          <div className="py-20 md:py-24">
+        <div className="relative h-full px-8 md:px-16 max-w-4xl flex items-center">
+          <div className="py-12 md:py-16">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 backdrop-blur-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-accent) 18%, transparent)', color: 'var(--theme-accent)', border: '1px solid color-mix(in srgb, var(--theme-accent) 35%, transparent)' }}>
             <Zap size={14} fill="currentColor" />
             <span>{activeSlide?.badge || 'Livraison Instantanée'}</span>
@@ -257,6 +373,19 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
           ))}
         </div>
       </section>
+
+      <ProductRailSection
+        railId="home-packages-rail"
+        title="Packages Disponibles"
+        subtitle="Des packs prêts à l’achat avec un prix global plus avantageux que l’achat séparé."
+        listings={packageListings}
+        onViewProduct={onViewProduct}
+        accent={
+          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-indigo-600">
+            <LucideIcons.Package size={12} /> Bundle
+          </span>
+        }
+      />
 
       <ProductRailSection
         railId="home-trending-rail"

@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, CreditCard, Lock, ShoppingBag, Smartphone, Trash2, Wallet } from 'lucide-react';
 import { api } from '../services/api';
 import { CartItem, Listing, SiteConfig, User } from '../types';
-import { clearGuestCart, getGuestCartCount, getGuestCartItems, removeGuestCartItem } from '../utils/guestCart';
+import { clearGuestCart, getGuestCartCount, getGuestCartItems, removeGuestCartLine } from '../utils/guestCart';
 import { getListingFinalPrice } from '../utils/pricing';
+import { richTextToPlainText } from '../utils/richText';
 import PriceDisplay from '../components/PriceDisplay';
 
 interface CartProps {
@@ -69,13 +70,13 @@ const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate, siteConfig, listi
   }, [isGuest, listings]);
 
   const total = useMemo(
-    () => items.reduce((sum, item) => sum + (getListingFinalPrice(item.listing) * item.quantity), 0),
+    () => items.reduce((sum, item) => sum + ((item.variant?.price ?? getListingFinalPrice(item.listing)) * item.quantity), 0),
     [items]
   );
 
   const handleRemove = async (item: CartItem) => {
     if (isGuest) {
-      const nextItems = removeGuestCartItem(item.listingId);
+      const nextItems = removeGuestCartLine(item.listingId, item.variantId);
       setItems(getGuestCartItems(listings));
       onCartUpdate(nextItems.reduce((acc, entry) => acc + entry.quantity, 0));
       return;
@@ -113,6 +114,7 @@ const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate, siteConfig, listi
             paymentMethod,
             items: items.map((item) => ({
               listingId: item.listingId,
+              variantId: item.variantId,
               quantity: item.quantity
             }))
           })
@@ -232,10 +234,19 @@ const Cart: React.FC<CartProps> = ({ navigateTo, onCartUpdate, siteConfig, listi
               <div className="flex-1 text-center sm:text-left">
                 <div className="text-xs font-bold text-indigo-600 uppercase mb-1">{item.listing.game}</div>
                 <h3 className="font-bold text-slate-900 text-xl mb-1">{item.listing.title}</h3>
-                <p className="text-sm text-slate-400">{item.listing.description}</p>
+                {item.variant && (
+                  <div className="mb-1 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+                    {item.listing.variantLabel ? `${item.listing.variantLabel}: ` : ''}{item.variant.name}
+                  </div>
+                )}
+                <p className="text-sm text-slate-400">{richTextToPlainText(item.listing.description)}</p>
               </div>
               <div className="text-right mx-6 mt-4 sm:mt-0">
-                <PriceDisplay listing={item.listing} priceClassName="font-black text-xl text-slate-900" />
+                {item.variant ? (
+                  <div className="font-black text-xl text-slate-900">{item.variant.price.toFixed(2)} <span className="text-xs font-normal text-slate-500">TND</span></div>
+                ) : (
+                  <PriceDisplay listing={item.listing} priceClassName="font-black text-xl text-slate-900" />
+                )}
                 <div className="text-xs font-medium text-slate-400 bg-slate-100 inline-block px-2 py-1 rounded mt-1">Qté: {item.quantity}</div>
               </div>
               <button onClick={() => handleRemove(item)} className="text-slate-300 hover:text-indigo-500 p-3 hover:bg-indigo-50 rounded-xl transition-all mt-4 sm:mt-0">

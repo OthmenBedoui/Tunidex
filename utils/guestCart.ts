@@ -4,6 +4,7 @@ const GUEST_CART_KEY = 'tunidex_guest_cart';
 
 type StoredGuestCartItem = {
   listingId: string;
+  variantId?: string;
   quantity: number;
 };
 
@@ -15,7 +16,11 @@ const readStoredCart = (): StoredGuestCartItem[] => {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((item) => item && typeof item.listingId === 'string' && Number.isInteger(item.quantity) && item.quantity > 0)
-      .map((item) => ({ listingId: item.listingId, quantity: item.quantity }));
+      .map((item) => ({
+        listingId: item.listingId,
+        variantId: typeof item.variantId === 'string' ? item.variantId : undefined,
+        quantity: item.quantity
+      }));
   } catch {
     return [];
   }
@@ -27,19 +32,25 @@ const writeStoredCart = (items: StoredGuestCartItem[]) => {
 
 export const getGuestCartCount = () => readStoredCart().reduce((total, item) => total + item.quantity, 0);
 
-export const addGuestCartItem = (listingId: string) => {
+export const addGuestCartItem = (listingId: string, variantId?: string) => {
   const items = readStoredCart();
-  const existing = items.find((item) => item.listingId === listingId);
+  const existing = items.find((item) => item.listingId === listingId && (item.variantId || '') === (variantId || ''));
   if (existing) {
     existing.quantity += 1;
   } else {
-    items.push({ listingId, quantity: 1 });
+    items.push({ listingId, variantId, quantity: 1 });
   }
   writeStoredCart(items);
 };
 
 export const removeGuestCartItem = (listingId: string) => {
   const nextItems = readStoredCart().filter((item) => item.listingId !== listingId);
+  writeStoredCart(nextItems);
+  return nextItems;
+};
+
+export const removeGuestCartLine = (listingId: string, variantId?: string) => {
+  const nextItems = readStoredCart().filter((item) => !(item.listingId === listingId && (item.variantId || '') === (variantId || '')));
   writeStoredCart(nextItems);
   return nextItems;
 };
@@ -51,12 +62,15 @@ export const clearGuestCart = () => {
 export const getGuestCartItems = (listings: Listing[]): CartItem[] => {
   const listingMap = new Map(listings.map((listing) => [listing.id, listing]));
   return readStoredCart()
-    .map((item, index) => {
+    .map<CartItem | null>((item, index) => {
       const listing = listingMap.get(item.listingId);
       if (!listing || listing.isArchived) return null;
+      const variant = item.variantId ? listing.variants?.find((entry) => entry.id === item.variantId) : undefined;
       return {
-        id: `guest-${item.listingId}-${index}`,
+        id: `guest-${item.listingId}-${item.variantId || 'base'}-${index}`,
         listingId: item.listingId,
+        ...(item.variantId ? { variantId: item.variantId } : {}),
+        ...(variant ? { variant } : {}),
         quantity: item.quantity,
         listing
       };

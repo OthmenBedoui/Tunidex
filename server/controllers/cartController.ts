@@ -71,7 +71,21 @@ const serializeOrder = <T extends {
  *                 $ref: '#/components/schemas/CartItem'
  */
 export const getCart = async (req: AuthRequest, res: Response) => {
-    const cart = await prisma.cart.findUnique({ where: { userId: req.user?.id }, include: { items: { include: { listing: true } } } });
+    const cart = await prisma.cart.findUnique({
+        where: { userId: req.user?.id },
+        include: {
+            items: {
+                include: {
+                    variant: true,
+                    listing: {
+                        include: {
+                            variants: { orderBy: [{ order: 'asc' }, { price: 'asc' }] }
+                        }
+                    }
+                }
+            }
+        }
+    });
     res.json(cart?.items || []);
 };
 
@@ -98,12 +112,21 @@ export const getCart = async (req: AuthRequest, res: Response) => {
  *         description: Added to cart
  */
 export const addToCart = async (req: AuthRequest, res: Response) => {
-    const { listingId } = req.body;
+    const { listingId, variantId } = req.body;
+    const listing = await prisma.listing.findUnique({
+        where: { id: listingId },
+        include: { variants: true }
+    });
+    if (!listing || listing.isArchived) return res.status(404).json({ error: 'Produit introuvable.' });
+    if (listing.variants.length > 0) {
+        const selectedVariant = listing.variants.find((variant) => variant.id === variantId);
+        if (!selectedVariant) return res.status(400).json({ error: 'Veuillez choisir une variante.' });
+    }
     let cart = await prisma.cart.findUnique({ where: { userId: req.user?.id } });
     if (!cart) cart = await prisma.cart.create({ data: { userId: req.user?.id } });
-    const existing = await prisma.cartItem.findFirst({ where: { cartId: cart.id, listingId } });
+    const existing = await prisma.cartItem.findFirst({ where: { cartId: cart.id, listingId, variantId: variantId || null } });
     if (existing) await prisma.cartItem.update({ where: { id: existing.id }, data: { quantity: existing.quantity + 1 } });
-    else await prisma.cartItem.create({ data: { cartId: cart.id, listingId, quantity: 1 } });
+    else await prisma.cartItem.create({ data: { cartId: cart.id, listingId, variantId: variantId || null, quantity: 1 } });
     res.json({ success: true });
 };
 
@@ -156,7 +179,7 @@ export const checkout = async (req: AuthRequest, res: Response) => {
             email: user.email,
             phone: user.phone || req.body.phone || '+216',
             paymentMethod: req.body.paymentMethod,
-            items: cart.items.map((item) => ({ listingId: item.listingId, quantity: item.quantity })),
+            items: cart.items.map((item) => ({ listingId: item.listingId, variantId: item.variantId || undefined, quantity: item.quantity })),
             userId: user.id,
             source: 'AUTHENTICATED'
         });

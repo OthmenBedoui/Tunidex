@@ -1,12 +1,49 @@
 
 import { Request, Response } from 'express';
 import prisma from '../prisma.js';
+import { Prisma } from '@prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
+import ExcelJS from 'exceljs';
 
-const siteConfigPath = path.join(process.cwd(), 'server', 'data', 'site-config.json');
+const SITE_CONFIG_KEY = 'site';
+const legacySiteConfigPath = path.join(process.cwd(), 'server', 'data', 'site-config.json');
 
-const defaultSiteConfig = {
+type SiteConfigData = {
+    logoUrl: string;
+    siteName: string;
+    faviconUrl: string;
+    primaryColor: string;
+    heroSlides: unknown[];
+    heroSlideHeight: number;
+    accentColor: string;
+    accentHoverColor: string;
+    accentSoftColor: string;
+    accentTextColor: string;
+    headerAnnouncement: string;
+    headerSearchPlaceholder: string;
+    headerCtaLabel: string;
+    footerTagline: string;
+    footerDescription: string;
+    footerEmail: string;
+    footerPhone: string;
+    footerWhatsapp: string;
+    footerAddress: string;
+    footerCopyright: string;
+    smtpMailerName: string;
+    smtpHost: string;
+    smtpDriver: string;
+    smtpPort: string;
+    smtpUsername: string;
+    smtpEmailId: string;
+    smtpEncryption: string;
+    smtpPassword: string;
+    click2payEnabled: boolean;
+    click2payMerchantId: string;
+    click2payApiKey: string;
+};
+
+const defaultSiteConfig: SiteConfigData = {
     logoUrl: '',
     siteName: 'Tunidex',
     faviconUrl: '',
@@ -17,6 +54,16 @@ const defaultSiteConfig = {
     accentHoverColor: '#4338ca',
     accentSoftColor: '#e0e7ff',
     accentTextColor: '#312e81',
+    headerAnnouncement: 'Bienvenue sur la première plateforme digitale en Tunisie !',
+    headerSearchPlaceholder: 'Rechercher jeux, items, comptes...',
+    headerCtaLabel: "S'inscrire",
+    footerTagline: 'Marketplace digitale premium',
+    footerDescription: 'La destination premium pour vos comptes, licences, abonnements, outils IA et services digitaux en Tunisie.',
+    footerEmail: 'support@tunidex.tn',
+    footerPhone: '+216 00 000 000',
+    footerWhatsapp: '+216 00 000 000',
+    footerAddress: 'Tunis, Tunisie',
+    footerCopyright: 'Tous droits réservés.',
     smtpMailerName: '',
     smtpHost: '',
     smtpDriver: 'smtp',
@@ -30,6 +77,30 @@ const defaultSiteConfig = {
     click2payApiKey: ''
 };
 
+const asInputJson = (value: SiteConfigData): Prisma.InputJsonValue => {
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+};
+
+const mergeSiteConfig = (value: unknown): SiteConfigData => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { ...defaultSiteConfig };
+    }
+
+    return {
+        ...defaultSiteConfig,
+        ...(value as Partial<SiteConfigData>)
+    };
+};
+
+const loadInitialSiteConfig = async () => {
+    try {
+        const raw = await fs.readFile(legacySiteConfigPath, 'utf8');
+        return mergeSiteConfig(JSON.parse(raw));
+    } catch {
+        return { ...defaultSiteConfig };
+    }
+};
+
 const estimateBase64Size = (value: unknown) => {
     if (typeof value !== 'string' || !value.startsWith('data:')) return 0;
     const base64 = value.split(',')[1] || '';
@@ -37,24 +108,34 @@ const estimateBase64Size = (value: unknown) => {
 };
 
 const readSiteConfig = async () => {
-    try {
-        const content = await fs.readFile(siteConfigPath, 'utf8');
-        console.log(`[site-config] read ok path=${siteConfigPath} bytes=${Buffer.byteLength(content, 'utf8')}`);
-        return { ...defaultSiteConfig, ...JSON.parse(content) };
-    } catch (error) {
-        console.warn(`[site-config] read fallback path=${siteConfigPath}`, error);
-        await fs.mkdir(path.dirname(siteConfigPath), { recursive: true });
-        await fs.writeFile(siteConfigPath, JSON.stringify(defaultSiteConfig, null, 2), 'utf8');
-        console.log(`[site-config] initialized default config path=${siteConfigPath}`);
-        return defaultSiteConfig;
+    const record = await prisma.siteConfig.findUnique({ where: { key: SITE_CONFIG_KEY } });
+
+    if (record) {
+        return mergeSiteConfig(record.data);
     }
+
+    const initialConfig = await loadInitialSiteConfig();
+    const created = await prisma.siteConfig.create({
+        data: {
+            key: SITE_CONFIG_KEY,
+            data: asInputJson(initialConfig)
+        }
+    });
+
+    return mergeSiteConfig(created.data);
 };
 
-const writeSiteConfig = async (config: typeof defaultSiteConfig) => {
-    await fs.mkdir(path.dirname(siteConfigPath), { recursive: true });
-    const payload = JSON.stringify(config, null, 2);
-    await fs.writeFile(siteConfigPath, payload, 'utf8');
-    console.log(`[site-config] write ok path=${siteConfigPath} bytes=${Buffer.byteLength(payload, 'utf8')}`);
+const writeSiteConfig = async (config: SiteConfigData) => {
+    await prisma.siteConfig.upsert({
+        where: { key: SITE_CONFIG_KEY },
+        create: {
+            key: SITE_CONFIG_KEY,
+            data: asInputJson(config)
+        },
+        update: {
+            data: asInputJson(config)
+        }
+    });
 };
 
 /**
@@ -202,12 +283,28 @@ export const updateSiteConfig = async (req: Request, res: Response) => {
  *       200:
  *         description: User role updated
  */
+const sanitizeUser = <T extends { password?: string }>(user: T) => {
+    const result = { ...user };
+    delete result.password;
+    return result;
+};
+
 export const updateUserRole = async (req: Request, res: Response) => {
     const user = await prisma.user.update({ where: { id: req.params.id }, data: { role: req.body.role } });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const u = { ...user } as { password?: string };
-    delete u.password;
-    res.json(u);
+    res.json(sanitizeUser(user));
+};
+
+export const updateUserBalance = async (req: Request, res: Response) => {
+    const balance = Number(req.body.balance);
+    if (!Number.isFinite(balance)) return res.status(400).json({ error: 'Balance invalide' });
+
+    const user = await prisma.user.update({
+        where: { id: req.params.id },
+        data: { balance }
+    });
+
+    res.json(sanitizeUser(user));
 };
 
 export const getAllOrders = async (_req: Request, res: Response) => {
@@ -262,4 +359,365 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         buyer: order.user,
         buyerDisplayName: `${order.customerFirstName} ${order.customerLastName}`.trim()
     });
+};
+
+const variantString = (variants: Array<{ name: string; price: number; order: number }>) =>
+    variants.map((variant) => `${variant.name}|${variant.price}|${variant.order}`).join('; ');
+
+const parseVariantString = (value: unknown) => {
+    if (typeof value !== 'string' || !value.trim()) return [];
+    return value.split(';')
+        .map((entry, index) => {
+            const [name, price, order] = entry.split('|').map((part) => part?.trim());
+            const parsedPrice = Number(price);
+            const parsedOrder = Number(order);
+            if (!name || !Number.isFinite(parsedPrice)) return null;
+            return { name, price: parsedPrice, order: Number.isInteger(parsedOrder) ? parsedOrder : index + 1 };
+        })
+        .filter((entry): entry is { name: string; price: number; order: number } => Boolean(entry));
+};
+
+const cellText = (value: ExcelJS.CellValue) => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'object' && 'text' in value) return String(value.text || '').trim();
+    if (typeof value === 'object' && 'result' in value) return String(value.result || '').trim();
+    return String(value).trim();
+};
+
+const readSheetRows = (worksheet?: ExcelJS.Worksheet) => {
+    if (!worksheet) return [];
+    const headers = (worksheet.getRow(1).values as ExcelJS.CellValue[])
+        .slice(1)
+        .map((value) => cellText(value));
+    const rows: Record<string, string>[] = [];
+
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const values = row.values as ExcelJS.CellValue[];
+        const record: Record<string, string> = {};
+        headers.forEach((header, index) => {
+            record[header] = cellText(values[index + 1]);
+        });
+        if (Object.values(record).some(Boolean)) rows.push(record);
+    });
+
+    return rows;
+};
+
+const styleSheet = (worksheet: ExcelJS.Worksheet) => {
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF111827' } };
+    worksheet.columns.forEach((column) => {
+        column.width = Math.min(Math.max((column.header?.toString().length || 12) + 4, 14), 42);
+    });
+};
+
+export const exportSiteData = async (_req: Request, res: Response) => {
+    const [categories, subCategories, listings] = await Promise.all([
+        prisma.category.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+        prisma.subCategory.findMany({ include: { category: true }, orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+        prisma.listing.findMany({
+            include: {
+                category: true,
+                subCategory: true,
+                variants: { orderBy: [{ order: 'asc' }, { price: 'asc' }] }
+            },
+            orderBy: { createdAt: 'desc' }
+        })
+    ]);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Tunidex Admin';
+    workbook.created = new Date();
+
+    const categorySheet = workbook.addWorksheet('Categories');
+    categorySheet.columns = [
+        { header: 'id', key: 'id' },
+        { header: 'name', key: 'name' },
+        { header: 'slug', key: 'slug' },
+        { header: 'icon', key: 'icon' },
+        { header: 'imageUrl', key: 'imageUrl' },
+        { header: 'gradient', key: 'gradient' },
+        { header: 'description', key: 'description' },
+        { header: 'order', key: 'order' }
+    ];
+    categories.forEach((category) => categorySheet.addRow(category));
+    styleSheet(categorySheet);
+
+    const subCategorySheet = workbook.addWorksheet('SubCategories');
+    subCategorySheet.columns = [
+        { header: 'id', key: 'id' },
+        { header: 'name', key: 'name' },
+        { header: 'slug', key: 'slug' },
+        { header: 'categoryId', key: 'categoryId' },
+        { header: 'categorySlug', key: 'categorySlug' },
+        { header: 'icon', key: 'icon' },
+        { header: 'description', key: 'description' },
+        { header: 'order', key: 'order' }
+    ];
+    subCategories.forEach((subCategory) => subCategorySheet.addRow({
+        ...subCategory,
+        categorySlug: subCategory.category.slug
+    }));
+    styleSheet(subCategorySheet);
+
+    const productSheet = workbook.addWorksheet('Products');
+    productSheet.columns = [
+        { header: 'id', key: 'id' },
+        { header: 'title', key: 'title' },
+        { header: 'description', key: 'description' },
+        { header: 'price', key: 'price' },
+        { header: 'categoryId', key: 'categoryId' },
+        { header: 'categorySlug', key: 'categorySlug' },
+        { header: 'subCategoryId', key: 'subCategoryId' },
+        { header: 'subCategorySlug', key: 'subCategorySlug' },
+        { header: 'game', key: 'game' },
+        { header: 'imageUrl', key: 'imageUrl' },
+        { header: 'logoUrl', key: 'logoUrl' },
+        { header: 'gallery', key: 'gallery' },
+        { header: 'stock', key: 'stock' },
+        { header: 'isInstant', key: 'isInstant' },
+        { header: 'preparationTime', key: 'preparationTime' },
+        { header: 'discountType', key: 'discountType' },
+        { header: 'discountValue', key: 'discountValue' },
+        { header: 'variantLabel', key: 'variantLabel' },
+        { header: 'variants', key: 'variants' },
+        { header: 'isArchived', key: 'isArchived' },
+        { header: 'metaTitle', key: 'metaTitle' },
+        { header: 'metaDesc', key: 'metaDesc' },
+        { header: 'keywords', key: 'keywords' }
+    ];
+    listings.forEach((listing) => productSheet.addRow({
+        ...listing,
+        categorySlug: listing.category.slug,
+        subCategorySlug: listing.subCategory?.slug || '',
+        gallery: listing.gallery,
+        variants: variantString(listing.variants)
+    }));
+    styleSheet(productSheet);
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="tunidex-data-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(Buffer.from(buffer));
+};
+
+export const importSiteData = async (req: Request, res: Response) => {
+    const rawFile = typeof req.body.fileBase64 === 'string' ? req.body.fileBase64 : '';
+    if (!rawFile) return res.status(400).json({ error: 'Fichier Excel manquant.' });
+
+    const base64 = rawFile.includes(',') ? rawFile.split(',').pop() || '' : rawFile;
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(base64, 'base64'));
+
+    const categoryRows = readSheetRows(workbook.getWorksheet('Categories'));
+    const subCategoryRows = readSheetRows(workbook.getWorksheet('SubCategories'));
+    const productRows = readSheetRows(workbook.getWorksheet('Products'));
+
+    let categoriesImported = 0;
+    let subCategoriesImported = 0;
+    let productsImported = 0;
+
+    for (const row of categoryRows) {
+        if (!row.name || !row.slug) continue;
+        await prisma.category.upsert({
+            where: { slug: row.slug },
+            create: {
+                name: row.name,
+                slug: row.slug,
+                icon: row.icon || 'Package',
+                imageUrl: row.imageUrl || null,
+                gradient: row.gradient || null,
+                description: row.description || null,
+                order: Number(row.order) || 0
+            },
+            update: {
+                name: row.name,
+                icon: row.icon || 'Package',
+                imageUrl: row.imageUrl || null,
+                gradient: row.gradient || null,
+                description: row.description || null,
+                order: Number(row.order) || 0
+            }
+        });
+        categoriesImported += 1;
+    }
+
+    for (const row of subCategoryRows) {
+        if (!row.name || !row.slug) continue;
+        const category = await prisma.category.findFirst({
+            where: {
+                OR: [
+                    ...(row.categoryId ? [{ id: row.categoryId }] : []),
+                    ...(row.categorySlug ? [{ slug: row.categorySlug }] : [])
+                ]
+            }
+        });
+        if (!category) continue;
+        await prisma.subCategory.upsert({
+            where: { slug: row.slug },
+            create: {
+                name: row.name,
+                slug: row.slug,
+                categoryId: category.id,
+                icon: row.icon || 'Package',
+                description: row.description || '',
+                order: Number(row.order) || 0
+            },
+            update: {
+                name: row.name,
+                categoryId: category.id,
+                icon: row.icon || 'Package',
+                description: row.description || '',
+                order: Number(row.order) || 0
+            }
+        });
+        subCategoriesImported += 1;
+    }
+
+    for (const row of productRows) {
+        if (!row.title) continue;
+        const category = await prisma.category.findFirst({
+            where: {
+                OR: [
+                    ...(row.categoryId ? [{ id: row.categoryId }] : []),
+                    ...(row.categorySlug ? [{ slug: row.categorySlug }] : [])
+                ]
+            }
+        });
+        if (!category) continue;
+
+        const subCategory = row.subCategoryId || row.subCategorySlug
+            ? await prisma.subCategory.findFirst({
+                where: {
+                    OR: [
+                        ...(row.subCategoryId ? [{ id: row.subCategoryId }] : []),
+                        ...(row.subCategorySlug ? [{ slug: row.subCategorySlug }] : [])
+                    ]
+                }
+            })
+            : null;
+        const variants = parseVariantString(row.variants);
+        const data = {
+            title: row.title,
+            description: row.description || '',
+            price: Number(row.price) || 0,
+            categoryId: category.id,
+            subCategoryId: subCategory?.id || null,
+            game: row.game || null,
+            imageUrl: row.imageUrl || '',
+            logoUrl: row.logoUrl || null,
+            gallery: row.gallery || '[]',
+            stock: Number(row.stock) || 0,
+            isInstant: row.isInstant ? row.isInstant.toLowerCase() !== 'false' : true,
+            preparationTime: row.preparationTime || 'Immédiat',
+            deliveryTimeHours: 24,
+            discountType: row.discountType || 'NONE',
+            discountValue: Number(row.discountValue) || 0,
+            discountPercent: row.discountType === 'PERCENT' ? Number(row.discountValue) || 0 : 0,
+            variantLabel: variants.length > 0 ? (row.variantLabel || 'Variante') : null,
+            isArchived: row.isArchived ? row.isArchived.toLowerCase() === 'true' : false,
+            metaTitle: row.metaTitle || null,
+            metaDesc: row.metaDesc || null,
+            keywords: row.keywords || null
+        };
+
+        const existing = row.id ? await prisma.listing.findUnique({ where: { id: row.id } }) : null;
+        if (existing) {
+            await prisma.listing.update({
+                where: { id: existing.id },
+                data: {
+                    ...data,
+                    variants: {
+                        deleteMany: {},
+                        ...(variants.length > 0 ? { create: variants } : {})
+                    }
+                }
+            });
+        } else {
+            await prisma.listing.create({
+                data: {
+                    ...data,
+                    variants: variants.length > 0 ? { create: variants } : undefined
+                }
+            });
+        }
+        productsImported += 1;
+    }
+
+    res.json({ success: true, categoriesImported, subCategoriesImported, productsImported });
+};
+
+const cleanOrders = async (tx: Prisma.TransactionClient) => {
+    await tx.invoiceItem.deleteMany({});
+    await tx.invoice.deleteMany({});
+    await tx.payment.deleteMany({});
+    await tx.loyaltyPoint.deleteMany({});
+    await tx.orderItem.deleteMany({});
+    await tx.order.deleteMany({});
+    await tx.dailyStat.deleteMany({});
+};
+
+const cleanProducts = async (tx: Prisma.TransactionClient) => {
+    await cleanOrders(tx);
+    await tx.cartItem.deleteMany({});
+    await tx.packageItem.deleteMany({});
+    await tx.productVariant.deleteMany({});
+    await tx.listing.deleteMany({});
+};
+
+const cleanCategories = async (tx: Prisma.TransactionClient) => {
+    await cleanProducts(tx);
+    await tx.subCategory.deleteMany({});
+    await tx.category.deleteMany({});
+};
+
+export const cleanSiteData = async (req: Request, res: Response) => {
+    const table = String(req.body.table || '');
+    const confirmation = String(req.body.confirmation || '');
+    if (confirmation !== 'CONFIRM CLEAN') {
+        return res.status(400).json({ error: 'Confirmation invalide. Tapez CONFIRM CLEAN.' });
+    }
+
+    const before = {
+        categories: await prisma.category.count(),
+        subCategories: await prisma.subCategory.count(),
+        products: await prisma.listing.count(),
+        orders: await prisma.order.count(),
+        users: await prisma.user.count()
+    };
+
+    await prisma.$transaction(async (tx) => {
+        if (table === 'orders') {
+            await cleanOrders(tx);
+        } else if (table === 'products') {
+            await cleanProducts(tx);
+        } else if (table === 'categories') {
+            await cleanCategories(tx);
+        } else if (table === 'users') {
+            await cleanOrders(tx);
+            await tx.cartItem.deleteMany({});
+            await tx.cart.deleteMany({});
+            await tx.user.deleteMany({ where: { role: { notIn: ['ADMIN', 'SUB_ADMIN', 'SELLER', 'AGENT'] } } });
+        } else if (table === 'all') {
+            await cleanCategories(tx);
+            await tx.cartItem.deleteMany({});
+            await tx.cart.deleteMany({});
+            await tx.sequence.deleteMany({});
+            await tx.user.deleteMany({ where: { role: { notIn: ['ADMIN', 'SUB_ADMIN', 'SELLER', 'AGENT'] } } });
+        } else {
+            throw new Error('Table non supportée.');
+        }
+    });
+
+    const after = {
+        categories: await prisma.category.count(),
+        subCategories: await prisma.subCategory.count(),
+        products: await prisma.listing.count(),
+        orders: await prisma.order.count(),
+        users: await prisma.user.count()
+    };
+
+    res.json({ success: true, table, before, after });
 };

@@ -1,13 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { Package, TrendingUp, DollarSign, Plus, Loader2, Zap, Crown, Users, Shield, FolderTree, Trash2, Edit, LayoutGrid, Save, X, Settings, User as UserIcon, Clock, History } from 'lucide-react';
-import { User, Order, OrderStatus, Listing, UserRole, Category, SubCategory, ProductType, LoginCredential, SiteConfig, HeroSlide, DiscountType } from '../types';
+import { User, Order, OrderStatus, Listing, UserRole, Category, SubCategory, ProductType, LoginCredential, SiteConfig, HeroSlide, DiscountType, ProductVariant } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { generateListingDescription } from '../services/geminiService';
 import { api } from '../services/api';
 import * as LucideIcons from 'lucide-react';
 import { ImageInput } from '../components/ImageInput';
-import { getListingDiscountLabel, getListingFinalPrice, hasListingDiscount } from '../utils/pricing';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { getListingDiscountLabel, getListingFinalPrice, getPackageOriginalTotal, getPackageSavings, hasListingDiscount } from '../utils/pricing';
+import { richTextToPlainText, sanitizeRichText } from '../utils/richText';
 
 interface AdminDashboardProps {
   orders: Order[];
@@ -40,6 +42,73 @@ const GRADIENT_PRESETS = [
     { name: 'Cyan', class: 'bg-gradient-to-r from-cyan-500 to-blue-600' },
 ];
 
+const PREMIUM_COLOR_PALETTES = [
+  {
+    name: 'Obsidian Gold',
+    description: 'Luxe sombre, idéal marketplace premium',
+    accentColor: '#d4af37',
+    accentHoverColor: '#b88916',
+    accentSoftColor: '#fff7d6',
+    accentTextColor: '#6f4e00',
+  },
+  {
+    name: 'Royal Sapphire',
+    description: 'Bleu profond, fiable et corporate',
+    accentColor: '#1d4ed8',
+    accentHoverColor: '#1e3a8a',
+    accentSoftColor: '#dbeafe',
+    accentTextColor: '#1e3a8a',
+  },
+  {
+    name: 'Emerald Vault',
+    description: 'Fintech, sécurité et conversion',
+    accentColor: '#047857',
+    accentHoverColor: '#065f46',
+    accentSoftColor: '#d1fae5',
+    accentTextColor: '#064e3b',
+  },
+  {
+    name: 'Crimson Elite',
+    description: 'Impact fort pour offres et gaming',
+    accentColor: '#dc2626',
+    accentHoverColor: '#991b1b',
+    accentSoftColor: '#fee2e2',
+    accentTextColor: '#7f1d1d',
+  },
+  {
+    name: 'Cyber Mint',
+    description: 'Tech moderne, lumineux et net',
+    accentColor: '#0891b2',
+    accentHoverColor: '#0e7490',
+    accentSoftColor: '#cffafe',
+    accentTextColor: '#155e75',
+  },
+  {
+    name: 'Amethyst Pro',
+    description: 'Premium créatif, IA et digital',
+    accentColor: '#7c3aed',
+    accentHoverColor: '#5b21b6',
+    accentSoftColor: '#ede9fe',
+    accentTextColor: '#4c1d95',
+  },
+  {
+    name: 'Graphite Lime',
+    description: 'Contraste sportif et très visible',
+    accentColor: '#65a30d',
+    accentHoverColor: '#3f6212',
+    accentSoftColor: '#ecfccb',
+    accentTextColor: '#365314',
+  },
+  {
+    name: 'Rose Noir',
+    description: 'Boutique premium, chaud et élégant',
+    accentColor: '#be185d',
+    accentHoverColor: '#9d174d',
+    accentSoftColor: '#fce7f3',
+    accentTextColor: '#831843',
+  },
+];
+
 const LUCIDE_ICON_OPTIONS = [
   'Gamepad2', 'Package', 'MonitorPlay', 'Bot', 'Sparkles', 'Crown', 'Shield', 'Zap',
   'Star', 'Gem', 'ShoppingBag', 'Store', 'BadgeDollarSign', 'Wallet', 'CreditCard', 'Coins',
@@ -47,6 +116,29 @@ const LUCIDE_ICON_OPTIONS = [
   'Code2', 'Cloud', 'Globe', 'Mail', 'MessageSquare', 'Users', 'UserRound', 'FolderTree',
   'LayoutGrid', 'Boxes', 'KeyRound', 'Lock', 'Rocket', 'Flame', 'Gift', 'Ticket'
 ];
+
+const SLIDE_MEDIA_RULES = {
+  recommended: '1920 x 640 px',
+  minWidth: 1280,
+  minHeight: 420,
+  imageMaxBytes: 4 * 1024 * 1024,
+  gifMaxBytes: 8 * 1024 * 1024,
+  videoMaxBytes: 18 * 1024 * 1024,
+  videoMaxDuration: 20,
+  accept: 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm'
+};
+
+const isVideoSlideMedia = (src?: string, mediaType?: HeroSlide['mediaType']) => {
+  if (mediaType === 'video') return true;
+  if (!src) return false;
+  return src.startsWith('data:video/') || /\.(mp4|webm)(\?|#|$)/i.test(src);
+};
+
+const inferSlideMediaType = (src: string): HeroSlide['mediaType'] => (
+  isVideoSlideMedia(src) ? 'video' : 'image'
+);
+
+const formatBytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
 
 const IconPicker = ({
   label,
@@ -132,7 +224,7 @@ const getListingStateClasses = (listing: Listing) => {
 };
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings, categories, onUpdateStatus, onCreateListing, onUpdateListing, onDeleteListing, onRefreshCategories, user, siteConfig, onUpdateSiteConfig }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'listings' | 'create' | 'users' | 'categories' | 'settings' | 'customization'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'listings' | 'create' | 'users' | 'categories' | 'settings' | 'customization' | 'data'>('overview');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<{name: string, sales: number, orders: number}[]>([]);
   const [summary, setSummary] = useState({ totalSales: 0, totalOrders: 0, totalUsers: 0 });
@@ -141,6 +233,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [listingPendingDelete, setListingPendingDelete] = useState<Listing | null>(null);
   const [isDeletingListing, setIsDeletingListing] = useState(false);
   const [orderFilter, setOrderFilter] = useState<'all' | OrderStatus>('all');
+  const [adminToast, setAdminToast] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
+  const [dataActionStatus, setDataActionStatus] = useState('');
+  const [dataActionError, setDataActionError] = useState('');
+  const [slideMediaError, setSlideMediaError] = useState('');
+  const [dataImportFile, setDataImportFile] = useState<File | null>(null);
+  const [cleanTarget, setCleanTarget] = useState('products');
+  const [cleanConfirmation, setCleanConfirmation] = useState('');
+  const [isDataActionLoading, setIsDataActionLoading] = useState(false);
   
   // --- Category Management State ---
   const [newCatName, setNewCatName] = useState('');
@@ -148,6 +248,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [newCatIcon, setNewCatIcon] = useState('Gamepad2');
   const [newCatImage, setNewCatImage] = useState('');
   const [newCatGradient, setNewCatGradient] = useState(GRADIENT_PRESETS[0].class);
+  const [newCatOrder, setNewCatOrder] = useState('0');
   
   // --- SubCategory Management State ---
   const [newSubCatName, setNewSubCatName] = useState('');
@@ -182,6 +283,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [newListingProductType, setNewListingProductType] = useState<ProductType>(ProductType.STANDARD);
   const [newListingCredentials, setNewListingCredentials] = useState<{username: string, password?: string}[]>([]);
   const [newListingStaticKey, setNewListingStaticKey] = useState('');
+  const [newListingIsPackage, setNewListingIsPackage] = useState(false);
+  const [newListingPackageItems, setNewListingPackageItems] = useState<Array<{ includedListingId: string; quantity: number }>>([]);
+  const [newListingVariantLabel, setNewListingVariantLabel] = useState('');
+  const [newListingVariants, setNewListingVariants] = useState<ProductVariant[]>([]);
   const [generatedDescription, setGeneratedDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
@@ -209,6 +314,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [editCatIcon, setEditCatIcon] = useState('');
   const [editCatName, setEditCatName] = useState('');
   const [editCatSlug, setEditCatSlug] = useState('');
+  const [editCatOrder, setEditCatOrder] = useState('0');
 
   const [editingSubCategory, setEditingSubCategory] = useState<SubCategory | null>(null);
   const [editSubName, setEditSubName] = useState('');
@@ -224,11 +330,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [siteFavicon, setSiteFavicon] = useState(siteConfig.faviconUrl || '');
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(siteConfig.heroSlides || []);
   const [heroSlideHeight, setHeroSlideHeight] = useState(siteConfig.heroSlideHeight || 440);
-  const [customizationSection, setCustomizationSection] = useState<'slides' | 'colors'>('slides');
+  const [customizationSection, setCustomizationSection] = useState<'slides' | 'colors' | 'layout'>('slides');
   const [accentColor, setAccentColor] = useState(siteConfig.accentColor || '#4f46e5');
   const [accentHoverColor, setAccentHoverColor] = useState(siteConfig.accentHoverColor || '#4338ca');
   const [accentSoftColor, setAccentSoftColor] = useState(siteConfig.accentSoftColor || '#e0e7ff');
   const [accentTextColor, setAccentTextColor] = useState(siteConfig.accentTextColor || '#312e81');
+  const [headerAnnouncement, setHeaderAnnouncement] = useState(siteConfig.headerAnnouncement || 'Bienvenue sur la première plateforme digitale en Tunisie !');
+  const [headerSearchPlaceholder, setHeaderSearchPlaceholder] = useState(siteConfig.headerSearchPlaceholder || 'Rechercher jeux, items, comptes...');
+  const [headerCtaLabel, setHeaderCtaLabel] = useState(siteConfig.headerCtaLabel || "S'inscrire");
+  const [footerTagline, setFooterTagline] = useState(siteConfig.footerTagline || 'Marketplace digitale premium');
+  const [footerDescription, setFooterDescription] = useState(siteConfig.footerDescription || 'La destination premium pour vos comptes, licences, abonnements, outils IA et services digitaux en Tunisie.');
+  const [footerEmail, setFooterEmail] = useState(siteConfig.footerEmail || 'support@tunidex.tn');
+  const [footerPhone, setFooterPhone] = useState(siteConfig.footerPhone || '+216 00 000 000');
+  const [footerWhatsapp, setFooterWhatsapp] = useState(siteConfig.footerWhatsapp || '+216 00 000 000');
+  const [footerAddress, setFooterAddress] = useState(siteConfig.footerAddress || 'Tunis, Tunisie');
+  const [footerCopyright, setFooterCopyright] = useState(siteConfig.footerCopyright || 'Tous droits réservés.');
+  const selectedPremiumPalette = PREMIUM_COLOR_PALETTES.find((palette) =>
+    palette.accentColor.toLowerCase() === accentColor.toLowerCase() &&
+    palette.accentHoverColor.toLowerCase() === accentHoverColor.toLowerCase() &&
+    palette.accentSoftColor.toLowerCase() === accentSoftColor.toLowerCase() &&
+    palette.accentTextColor.toLowerCase() === accentTextColor.toLowerCase()
+  );
+
+  const applyPremiumPalette = (palette: typeof PREMIUM_COLOR_PALETTES[number]) => {
+    setAccentColor(palette.accentColor);
+    setAccentHoverColor(palette.accentHoverColor);
+    setAccentSoftColor(palette.accentSoftColor);
+    setAccentTextColor(palette.accentTextColor);
+  };
   
   // --- SMTP Config State ---
   const [smtpMailerName, setSmtpMailerName] = useState(siteConfig.smtpMailerName || '');
@@ -245,6 +374,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [click2payMerchantId, setClick2payMerchantId] = useState(siteConfig.click2payMerchantId || '');
   const [click2payApiKey, setClick2payApiKey] = useState(siteConfig.click2payApiKey || '');
 
+  const showAdminToast = (toast: { type: 'success' | 'error'; title: string; message: string }) => {
+    setAdminToast(toast);
+  };
+
+  useEffect(() => {
+    if (!adminToast) return;
+    const timeout = window.setTimeout(() => setAdminToast(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [adminToast]);
+
   useEffect(() => {
     setSiteLogo(siteConfig.logoUrl);
     setSiteName(siteConfig.siteName);
@@ -255,6 +394,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     setAccentHoverColor(siteConfig.accentHoverColor || '#4338ca');
     setAccentSoftColor(siteConfig.accentSoftColor || '#e0e7ff');
     setAccentTextColor(siteConfig.accentTextColor || '#312e81');
+    setHeaderAnnouncement(siteConfig.headerAnnouncement || 'Bienvenue sur la première plateforme digitale en Tunisie !');
+    setHeaderSearchPlaceholder(siteConfig.headerSearchPlaceholder || 'Rechercher jeux, items, comptes...');
+    setHeaderCtaLabel(siteConfig.headerCtaLabel || "S'inscrire");
+    setFooterTagline(siteConfig.footerTagline || 'Marketplace digitale premium');
+    setFooterDescription(siteConfig.footerDescription || 'La destination premium pour vos comptes, licences, abonnements, outils IA et services digitaux en Tunisie.');
+    setFooterEmail(siteConfig.footerEmail || 'support@tunidex.tn');
+    setFooterPhone(siteConfig.footerPhone || '+216 00 000 000');
+    setFooterWhatsapp(siteConfig.footerWhatsapp || '+216 00 000 000');
+    setFooterAddress(siteConfig.footerAddress || 'Tunis, Tunisie');
+    setFooterCopyright(siteConfig.footerCopyright || 'Tous droits réservés.');
     setSmtpMailerName(siteConfig.smtpMailerName || '');
     setSmtpHost(siteConfig.smtpHost || '');
     setSmtpDriver(siteConfig.smtpDriver || '');
@@ -274,6 +423,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
       {
         id: Math.random().toString(36).slice(2, 10),
         imageUrl: '',
+        mediaType: 'image',
         badge: 'Dernière offre',
         title: '',
         subtitle: '',
@@ -352,8 +502,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
       e.preventDefault();
       if(!newCatName || !newCatSlug) return;
       try {
-          await api.createCategory({ name: newCatName, slug: newCatSlug, icon: newCatIcon, imageUrl: newCatImage, gradient: newCatGradient });
-          setNewCatName(''); setNewCatSlug(''); setNewCatImage('');
+          await api.createCategory({ name: newCatName, slug: newCatSlug, icon: newCatIcon, imageUrl: newCatImage, gradient: newCatGradient, order: parseInt(newCatOrder, 10) || 0 });
+          setNewCatName(''); setNewCatSlug(''); setNewCatImage(''); setNewCatOrder('0');
           onRefreshCategories();
       } catch {
           alert("Erreur");
@@ -367,6 +517,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
           onRefreshCategories();
       } catch {
           alert("Erreur");
+      }
+  };
+
+  const handleMoveCategory = async (categoryId: string, direction: 'up' | 'down') => {
+      const ordered = [...categories].sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+      const currentIndex = ordered.findIndex((category) => category.id === categoryId);
+      const nextIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+      if (currentIndex === -1 || nextIndex < 0 || nextIndex >= ordered.length) return;
+
+      const reordered = [...ordered];
+      const [movedCategory] = reordered.splice(currentIndex, 1);
+      reordered.splice(nextIndex, 0, movedCategory);
+
+      try {
+          await Promise.all(reordered.map((category, index) => api.updateCategory(category.id, { order: index + 1 })));
+          onRefreshCategories();
+          showAdminToast({
+            type: 'success',
+            title: 'Ordre des catégories mis à jour',
+            message: 'La nouvelle position sera appliquée dans le header, la home et les pages catégorie.'
+          });
+      } catch {
+          showAdminToast({
+            type: 'error',
+            title: 'Réorganisation impossible',
+            message: "L'ordre des catégories n'a pas pu être sauvegardé."
+          });
       }
   };
 
@@ -443,13 +621,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
               slug: editCatSlug,
               icon: editCatIcon,
               imageUrl: editCatImage, 
-              gradient: editCatGradient 
+              gradient: editCatGradient,
+              order: parseInt(editCatOrder, 10) || 0
           });
           setEditingCategory(null);
           onRefreshCategories();
-          alert('Catégorie mise à jour !');
+          showAdminToast({
+            type: 'success',
+            title: 'Catégorie mise à jour',
+            message: 'La photo et les informations de la catégorie ont été enregistrées avec succès.'
+          });
       } catch {
-          alert("Erreur");
+          showAdminToast({
+            type: 'error',
+            title: 'Mise à jour impossible',
+            message: "La catégorie n'a pas pu être enregistrée. Vérifiez l'image ou réessayez."
+          });
       }
   };
 
@@ -460,6 +647,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
       setEditCatIcon(cat.icon);
       setEditCatImage(cat.imageUrl || '');
       setEditCatGradient(cat.gradient || GRADIENT_PRESETS[0].class);
+      setEditCatOrder((cat.order || 0).toString());
   };
 
   // Product Key Management Helpers
@@ -475,6 +663,159 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     const updated = [...newListingCredentials];
     updated[index] = { ...updated[index], [field]: value };
     setNewListingCredentials(updated);
+  };
+
+  const togglePackageItem = (includedListingId: string) => {
+    setNewListingPackageItems((prev) => {
+      const exists = prev.some((item) => item.includedListingId === includedListingId);
+      if (exists) {
+        return prev.filter((item) => item.includedListingId !== includedListingId);
+      }
+      return [...prev, { includedListingId, quantity: 1 }];
+    });
+  };
+
+  const updatePackageItemQuantity = (includedListingId: string, quantity: number) => {
+    setNewListingPackageItems((prev) => prev.map((item) => (
+      item.includedListingId === includedListingId
+        ? { ...item, quantity: Math.max(1, Math.floor(quantity) || 1) }
+        : item
+    )));
+  };
+
+  const addListingVariant = () => {
+    setNewListingVariants((prev) => [...prev, { name: '', price: 0, order: prev.length + 1 }]);
+  };
+
+  const updateListingVariant = (index: number, patch: Partial<ProductVariant>) => {
+    setNewListingVariants((prev) => prev.map((variant, variantIndex) => (
+      variantIndex === index ? { ...variant, ...patch } : variant
+    )));
+  };
+
+  const removeListingVariant = (index: number) => {
+    setNewListingVariants((prev) => prev.filter((_, variantIndex) => variantIndex !== index));
+  };
+
+  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  const getImageSize = (src: string) => new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error("Impossible de lire les dimensions de l'image."));
+    image.src = src;
+  });
+
+  const getVideoMeta = (src: string) => new Promise<{ width: number; height: number; duration: number }>((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      resolve({ width: video.videoWidth, height: video.videoHeight, duration: video.duration });
+    };
+    video.onerror = () => reject(new Error('Impossible de lire les informations de la vidéo.'));
+    video.src = src;
+  });
+
+  const handleSlideMediaFile = async (slideId: string, file: File) => {
+    try {
+      setSlideMediaError('');
+      const isImage = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type);
+      const isVideo = ['video/mp4', 'video/webm'].includes(file.type);
+
+      if (!isImage && !isVideo) {
+        throw new Error('Format refusé. Utilisez JPG, PNG, WebP, GIF, MP4 ou WebM.');
+      }
+
+      const maxBytes = file.type === 'image/gif'
+        ? SLIDE_MEDIA_RULES.gifMaxBytes
+        : isVideo
+          ? SLIDE_MEDIA_RULES.videoMaxBytes
+          : SLIDE_MEDIA_RULES.imageMaxBytes;
+
+      if (file.size > maxBytes) {
+        throw new Error(`Fichier trop lourd. Maximum autorisé: ${formatBytes(maxBytes)}.`);
+      }
+
+      const objectUrl = URL.createObjectURL(file);
+      const meta = isVideo ? await getVideoMeta(objectUrl) : await getImageSize(objectUrl);
+      URL.revokeObjectURL(objectUrl);
+
+      if (meta.width < SLIDE_MEDIA_RULES.minWidth || meta.height < SLIDE_MEDIA_RULES.minHeight) {
+        throw new Error(`Dimensions insuffisantes. Minimum: ${SLIDE_MEDIA_RULES.minWidth} x ${SLIDE_MEDIA_RULES.minHeight}px.`);
+      }
+
+      const videoDuration = isVideo && 'duration' in meta ? Number(meta.duration) : 0;
+      if (isVideo && Number.isFinite(videoDuration) && videoDuration > SLIDE_MEDIA_RULES.videoMaxDuration) {
+        throw new Error(`Vidéo trop longue. Maximum: ${SLIDE_MEDIA_RULES.videoMaxDuration}s.`);
+      }
+
+      const mediaUrl = await readFileAsDataUrl(file);
+      updateHeroSlide(slideId, { imageUrl: mediaUrl, mediaType: isVideo ? 'video' : 'image' });
+    } catch (error) {
+      setSlideMediaError(error instanceof Error ? error.message : 'Fichier média invalide.');
+    }
+  };
+
+  const handleExportSiteData = async () => {
+    try {
+      setIsDataActionLoading(true);
+      setDataActionError('');
+      setDataActionStatus('');
+      const blob = await api.exportSiteData();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `tunidex-data-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setDataActionStatus('Export Excel généré.');
+    } catch (error) {
+      setDataActionError(error instanceof Error ? error.message : "Impossible d'exporter les données.");
+    } finally {
+      setIsDataActionLoading(false);
+    }
+  };
+
+  const handleImportSiteData = async () => {
+    if (!dataImportFile) {
+      setDataActionError('Choisissez un fichier Excel avant import.');
+      return;
+    }
+
+    try {
+      setIsDataActionLoading(true);
+      setDataActionError('');
+      setDataActionStatus('');
+      const fileBase64 = await readFileAsDataUrl(dataImportFile);
+      const result = await api.importSiteData(fileBase64);
+      setDataActionStatus(`Import terminé: ${result.categoriesImported} catégories, ${result.subCategoriesImported} sous-catégories, ${result.productsImported} produits.`);
+    } catch (error) {
+      setDataActionError(error instanceof Error ? error.message : "Impossible d'importer le fichier.");
+    } finally {
+      setIsDataActionLoading(false);
+    }
+  };
+
+  const handleCleanSiteData = async () => {
+    try {
+      setIsDataActionLoading(true);
+      setDataActionError('');
+      setDataActionStatus('');
+      const result = await api.cleanSiteData(cleanTarget, cleanConfirmation);
+      setDataActionStatus(`Nettoyage ${result.table} terminé. Produits: ${result.before.products} -> ${result.after.products}, catégories: ${result.before.categories} -> ${result.after.categories}, commandes: ${result.before.orders} -> ${result.after.orders}.`);
+      setCleanConfirmation('');
+    } catch (error) {
+      setDataActionError(error instanceof Error ? error.message : 'Nettoyage impossible.');
+    } finally {
+      setIsDataActionLoading(false);
+    }
   };
 
   const resetListingForm = () => {
@@ -497,6 +838,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     setNewListingProductType(ProductType.STANDARD);
     setNewListingCredentials([]);
     setNewListingStaticKey('');
+    setNewListingIsPackage(false);
+    setNewListingPackageItems([]);
+    setNewListingVariantLabel('');
+    setNewListingVariants([]);
     setEditingListing(null);
   };
 
@@ -525,6 +870,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         : []
     );
     setNewListingStaticKey(listing.staticKey || '');
+    setNewListingIsPackage(Boolean(listing.isPackage));
+    setNewListingVariantLabel(listing.variantLabel || '');
+    setNewListingPackageItems(
+      Array.isArray(listing.packageItems)
+        ? listing.packageItems.map((item) => ({
+            includedListingId: item.includedListingId,
+            quantity: item.quantity
+          }))
+        : []
+    );
+    setNewListingVariants(
+      Array.isArray(listing.variants)
+        ? listing.variants.map((variant, index) => ({
+            id: variant.id,
+            listingId: variant.listingId,
+            name: variant.name,
+            price: Number(variant.price),
+            order: variant.order ?? index + 1
+          }))
+        : []
+    );
     setActiveTab('create');
   };
 
@@ -532,12 +898,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const handleGenerateDescription = async () => {
     setIsGenerating(true);
     const desc = await generateListingDescription(newListingGame, "Produit", "High quality, fast delivery");
-    setGeneratedDescription(desc);
+    setGeneratedDescription(sanitizeRichText(desc));
     setIsGenerating(false);
   };
 
   const handleSubmitListing = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanDescription = sanitizeRichText(generatedDescription);
+    if (!richTextToPlainText(cleanDescription)) {
+      alert('Ajoutez une description produit.');
+      return;
+    }
+    if (newListingIsPackage && newListingPackageItems.length === 0) {
+      alert('Ajoutez au moins un produit au package.');
+      return;
+    }
+    const cleanVariants = newListingVariants
+      .map((variant, index) => ({
+        name: variant.name.trim(),
+        price: Number(variant.price),
+        order: variant.order || index + 1
+      }))
+      .filter((variant) => variant.name && Number.isFinite(variant.price) && variant.price >= 0);
     const galleryArray = newListingGallery.split(',').map(s => s.trim()).filter(s => s.length > 0);
     
     const credentials: LoginCredential[] = newListingCredentials.map(c => ({
@@ -553,24 +935,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         title: newListingTitle,
         categoryId: newListingCatId,
         subCategoryId: newListingSubCatId || undefined,
-        description: generatedDescription,
+        description: cleanDescription,
         price: parseFloat(newListingPrice),
+        isPackage: newListingIsPackage,
         discountType: newListingDiscountType,
         discountValue: newListingDiscountType === DiscountType.NONE ? 0 : parseFloat(newListingDiscount) || 0,
         discountPercent: newListingDiscountType === DiscountType.PERCENT ? parseInt(newListingDiscount, 10) || 0 : 0,
         imageUrl: newListingImageUrl,
         logoUrl: newListingLogoUrl,
         gallery: galleryArray,
-        stock: newListingProductType === ProductType.LOGIN_CREDENTIALS ? credentials.length : (newListingProductType === ProductType.KEY ? 999 : 1),
+        stock: newListingIsPackage ? 0 : (newListingProductType === ProductType.LOGIN_CREDENTIALS ? credentials.length : (newListingProductType === ProductType.KEY ? 999 : 1)),
         deliveryTimeHours: 24,
         isInstant: newListingIsInstant,
         preparationTime: newListingIsInstant ? 'Immédiat' : newListingPrepTime,
         metaTitle: newListingMetaTitle,
         metaDesc: newListingMetaDesc,
         keywords: newListingKeywords,
-        productType: newListingProductType,
-        credentials: newListingProductType === ProductType.LOGIN_CREDENTIALS ? credentials : [],
-        staticKey: newListingProductType === ProductType.KEY ? newListingStaticKey : undefined,
+        productType: newListingIsPackage ? ProductType.STANDARD : newListingProductType,
+        credentials: !newListingIsPackage && newListingProductType === ProductType.LOGIN_CREDENTIALS ? credentials : [],
+        staticKey: !newListingIsPackage && newListingProductType === ProductType.KEY ? newListingStaticKey : undefined,
+        packageItems: newListingIsPackage ? newListingPackageItems : [],
+        variantLabel: !newListingIsPackage && cleanVariants.length > 0 ? (newListingVariantLabel.trim() || 'Variante') : undefined,
+        variants: newListingIsPackage ? [] : cleanVariants,
     };
 
     if (editingListing) {
@@ -599,9 +985,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   };
 
   const selectedCategoryObj = categories.find(c => c.id === newListingCatId);
+  const orderedCategories = [...categories].sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+  const availablePackageListings = listings.filter((listing) => !listing.isArchived && !listing.isPackage && listing.id !== editingListing?.id);
+  const selectedPackageListings = newListingPackageItems
+    .map((item) => {
+      const includedListing = listings.find((listing) => listing.id === item.includedListingId);
+      return includedListing ? { ...item, includedListing } : null;
+    })
+    .filter((item): item is { includedListingId: string; quantity: number; includedListing: Listing } => Boolean(item));
+  const packageOriginalTotal = getPackageOriginalTotal({
+    packageItems: selectedPackageListings.map((item, index) => ({
+      id: `${item.includedListingId}-${index}`,
+      packageListingId: editingListing?.id || 'draft-package',
+      includedListingId: item.includedListingId,
+      quantity: item.quantity,
+      includedListing: item.includedListing
+    }))
+  });
+  const draftPackagePrice = parseFloat(newListingPrice) || 0;
+  const packageSavings = Math.max(0, packageOriginalTotal - draftPackagePrice);
 
   return (
     <>
+    {adminToast && (
+      <div className="fixed top-24 right-6 z-[80] animate-in slide-in-from-right-6 fade-in duration-300">
+        <div className={`w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border bg-white shadow-2xl ${
+          adminToast.type === 'success' ? 'border-emerald-100 shadow-emerald-100/70' : 'border-red-100 shadow-red-100/70'
+        }`}>
+          <div className={`h-1.5 ${adminToast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          <div className="flex items-start gap-4 p-4">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+              adminToast.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+            }`}>
+              {adminToast.type === 'success' ? <LucideIcons.CheckCircle2 size={22} /> : <LucideIcons.AlertCircle size={22} />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-black text-slate-900">{adminToast.title}</div>
+              <div className="mt-1 text-sm leading-5 text-slate-500">{adminToast.message}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAdminToast(null)}
+              className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Fermer la notification"
+            >
+              <LucideIcons.X size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="flex flex-col md:flex-row gap-6">
       {/* Sidebar */}
       <div className="w-full md:w-64 bg-white rounded-lg shadow p-4 h-fit sticky top-24">
@@ -617,6 +1050,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
             <>
               <button onClick={() => setActiveTab('customization')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'customization' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Images size={18} /> <span>Customisation</span></button>
               <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'settings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Settings size={18} /> <span>Paramètres</span></button>
+              <button onClick={() => setActiveTab('data')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'data' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Database size={18} /> <span>Données</span></button>
             </>
           )}
           {user.role === UserRole.ADMIN && (
@@ -635,6 +1069,106 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
             </div>
         )}
+         {activeTab === 'data' && user.role === UserRole.ADMIN && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-black text-slate-900">Gestion des données</h2>
+              <p className="mt-1 text-sm text-slate-500">Exporter, importer ou nettoyer les données principales du site.</p>
+            </div>
+
+            {(dataActionStatus || dataActionError) && (
+              <div className={`rounded-xl border px-4 py-3 text-sm font-bold ${dataActionError ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                {dataActionError || dataActionStatus}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="rounded-xl bg-indigo-50 p-3 text-indigo-600"><LucideIcons.Download size={22} /></div>
+                  <div>
+                    <h3 className="font-black text-slate-900">Exporter Excel</h3>
+                    <p className="text-sm text-slate-500">Produits, catégories et sous-catégories.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportSiteData}
+                  disabled={isDataActionLoading}
+                  className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Exporter .xlsx
+                </button>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600"><LucideIcons.Upload size={22} /></div>
+                  <div>
+                    <h3 className="font-black text-slate-900">Importer Excel</h3>
+                    <p className="text-sm text-slate-500">Format identique à l’export.</p>
+                  </div>
+                </div>
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  onChange={(event) => setDataImportFile(event.target.files?.[0] || null)}
+                  className="mb-4 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={handleImportSiteData}
+                  disabled={isDataActionLoading}
+                  className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Importer le fichier
+                </button>
+              </section>
+
+              <section className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="rounded-xl bg-white p-3 text-red-600"><LucideIcons.Trash2 size={22} /></div>
+                  <div>
+                    <h3 className="font-black text-red-900">Nettoyage base</h3>
+                    <p className="text-sm text-red-700">Action irréversible après confirmation.</p>
+                  </div>
+                </div>
+                <select
+                  value={cleanTarget}
+                  onChange={(event) => setCleanTarget(event.target.value)}
+                  className="mb-3 w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="products">Clean produits</option>
+                  <option value="categories">Clean catégories + produits</option>
+                  <option value="orders">Clean commandes</option>
+                  <option value="users">Clean utilisateurs non-admin</option>
+                  <option value="all">Clean all data</option>
+                </select>
+                <input
+                  type="text"
+                  value={cleanConfirmation}
+                  onChange={(event) => setCleanConfirmation(event.target.value)}
+                  placeholder="Tapez CONFIRM CLEAN"
+                  className="mb-4 w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={handleCleanSiteData}
+                  disabled={isDataActionLoading || cleanConfirmation !== 'CONFIRM CLEAN'}
+                  className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Exécuter nettoyage
+                </button>
+              </section>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+              <div className="font-bold text-slate-900">Notes de sécurité</div>
+              <p className="mt-2">`Clean all` conserve les comptes admin/staff et la configuration du site. Les exports contiennent les identifiants techniques, ce qui permet de modifier puis réimporter les mêmes lignes.</p>
+            </div>
+          </div>
+        )}
+
          {activeTab === 'settings' && user.role === UserRole.ADMIN && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Section 1: Logo & Icone du Site */}
@@ -954,6 +1488,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                     >
                         Couleurs
                     </button>
+                    <button
+                        onClick={() => setCustomizationSection('layout')}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customizationSection === 'layout' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'}`}
+                    >
+                        Header & Footer
+                    </button>
                 </div>
 
                 {customizationSection === 'slides' && (
@@ -973,6 +1513,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                         </button>
                     </div>
                     <div className="p-6 space-y-6">
+                        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
+                            <div className="flex items-start gap-3">
+                                <LucideIcons.Info size={20} className="mt-0.5 shrink-0 text-blue-600" />
+                                <div>
+                                    <div className="font-black">Normes média pour les slides</div>
+                                    <p className="mt-1 leading-relaxed">
+                                        Utilisez le même format visuel pour tous les slides afin de garder une bannière stable: ratio conseillé 3:1, dimensions recommandées {SLIDE_MEDIA_RULES.recommended}, minimum {SLIDE_MEDIA_RULES.minWidth} x {SLIDE_MEDIA_RULES.minHeight}px. Formats acceptés: JPG, PNG, WebP, GIF animé, MP4, WebM. Taille max: image {formatBytes(SLIDE_MEDIA_RULES.imageMaxBytes)}, GIF {formatBytes(SLIDE_MEDIA_RULES.gifMaxBytes)}, vidéo {formatBytes(SLIDE_MEDIA_RULES.videoMaxBytes)}. Vidéo: {SLIDE_MEDIA_RULES.videoMaxDuration}s max, muette/loop, compression web H.264 MP4 ou WebM.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {slideMediaError && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                                {slideMediaError}
+                            </div>
+                        )}
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                             <div>
                                 <div className="text-xs uppercase tracking-widest text-slate-400 font-bold">Redimensionnement global</div>
@@ -1008,12 +1564,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                 </div>
                                 <div className="p-5 grid grid-cols-1 xl:grid-cols-2 gap-6">
                                     <div className="space-y-4">
-                                        <ImageInput
-                                            label="Image du slide"
-                                            value={slide.imageUrl}
-                                            onChange={(value) => updateHeroSlide(slide.id, { imageUrl: value })}
-                                            placeholder="URL du background ou upload"
-                                        />
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Média du slide</label>
+                                                <select
+                                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600"
+                                                    value={slide.mediaType || inferSlideMediaType(slide.imageUrl)}
+                                                    onChange={(e) => updateHeroSlide(slide.id, { mediaType: e.target.value as HeroSlide['mediaType'] })}
+                                                >
+                                                    <option value="image">Image / GIF</option>
+                                                    <option value="video">Vidéo</option>
+                                                </select>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30"
+                                                value={slide.imageUrl.startsWith('data:') ? '' : slide.imageUrl}
+                                                onChange={(e) => updateHeroSlide(slide.id, { imageUrl: e.target.value, mediaType: inferSlideMediaType(e.target.value) })}
+                                                placeholder="URL image, GIF, MP4 ou WebM"
+                                            />
+                                            <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4">
+                                                <input
+                                                    type="file"
+                                                    accept={SLIDE_MEDIA_RULES.accept}
+                                                    onChange={(event) => {
+                                                        const file = event.target.files?.[0];
+                                                        if (file) handleSlideMediaFile(slide.id, file);
+                                                        event.currentTarget.value = '';
+                                                    }}
+                                                    className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-700"
+                                                />
+                                                <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                                                    Upload validé selon les normes ci-dessus. Les vidéos et GIFs sont gardés dans leur format pour préserver l’animation.
+                                                </div>
+                                            </div>
+                                            {slide.imageUrl && (
+                                                <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
+                                                    {isVideoSlideMedia(slide.imageUrl, slide.mediaType) ? (
+                                                        <video src={slide.imageUrl} className="h-32 w-full object-cover" muted loop playsInline controls />
+                                                    ) : (
+                                                        <img src={slide.imageUrl} className="h-32 w-full object-cover" alt="Aperçu média slide" />
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Badge</label>
@@ -1064,8 +1658,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="rounded-3xl overflow-hidden bg-slate-900 shadow-xl relative" style={{ minHeight: `${Math.max(260, heroSlideHeight - 100)}px` }}>
-                                        <div className="absolute inset-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url('${slide.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'}')` }}></div>
+                                    <div className="rounded-3xl overflow-hidden bg-slate-900 shadow-xl relative" style={{ height: `${Math.max(300, heroSlideHeight - 80)}px` }}>
+                                        {isVideoSlideMedia(slide.imageUrl, slide.mediaType) ? (
+                                            <video src={slide.imageUrl} className="absolute inset-0 h-full w-full object-cover opacity-45" muted loop playsInline autoPlay />
+                                        ) : (
+                                            <img src={slide.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'} className="absolute inset-0 h-full w-full object-cover opacity-40" alt="" />
+                                        )}
                                         <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent"></div>
                                         <div className="relative px-8 py-12 max-w-3xl text-white">
                                             <div className="inline-flex items-center space-x-2 bg-indigo-600/20 text-indigo-400 border border-indigo-600/30 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 backdrop-blur-sm">
@@ -1094,6 +1692,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                     </div>
                     <div className="p-6 grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-8">
                         <div className="space-y-5">
+                            <div>
+                                <div className="flex items-end justify-between gap-3 mb-3">
+                                    <div>
+                                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Palettes premium</h3>
+                                        <p className="text-xs text-slate-500 mt-1">Clique sur une palette pour appliquer les 4 couleurs du thème.</p>
+                                    </div>
+                                    {selectedPremiumPalette && (
+                                        <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 border border-emerald-100">
+                                            {selectedPremiumPalette.name}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {PREMIUM_COLOR_PALETTES.map((palette) => {
+                                        const isSelected = selectedPremiumPalette?.name === palette.name;
+
+                                        return (
+                                            <button
+                                                key={palette.name}
+                                                type="button"
+                                                onClick={() => applyPremiumPalette(palette)}
+                                                className={`group text-left rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg ${
+                                                    isSelected
+                                                        ? 'border-slate-900 bg-slate-900 text-white shadow-xl shadow-slate-200'
+                                                        : 'border-slate-200 bg-white text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="font-black truncate">{palette.name}</div>
+                                                        <div className={`text-xs mt-1 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>{palette.description}</div>
+                                                    </div>
+                                                    {isSelected && <LucideIcons.Check size={18} className="shrink-0" />}
+                                                </div>
+                                                <div className="mt-4 grid grid-cols-4 gap-1.5">
+                                                    {[palette.accentColor, palette.accentHoverColor, palette.accentSoftColor, palette.accentTextColor].map((color) => (
+                                                        <span
+                                                            key={color}
+                                                            className="h-8 rounded-xl border border-white/40 shadow-inner"
+                                                            style={{ backgroundColor: color }}
+                                                            title={color}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="h-px bg-slate-100" />
+
                             {[
                                 { label: 'Couleur principale', value: accentColor, setter: setAccentColor },
                                 { label: 'Couleur hover', value: accentHoverColor, setter: setAccentHoverColor },
@@ -1138,9 +1788,123 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                 </div>
                 )}
 
+                {customizationSection === 'layout' && (
+                <div className="space-y-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                            <h2 className="text-lg font-bold text-slate-900 leading-tight">Header public</h2>
+                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Barre d'annonce, recherche et bouton d'inscription</p>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-8">
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Texte de la barre haute</label>
+                                    <input value={headerAnnouncement} onChange={(e) => setHeaderAnnouncement(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Placeholder recherche</label>
+                                    <input value={headerSearchPlaceholder} onChange={(e) => setHeaderSearchPlaceholder(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Label bouton CTA</label>
+                                    <input value={headerCtaLabel} onChange={(e) => setHeaderCtaLabel(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                </div>
+                            </div>
+                            <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                                <div className="text-xs uppercase tracking-widest text-slate-400 font-bold mb-4">Aperçu header</div>
+                                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                    <div className="px-4 py-2 text-center text-xs font-black text-white" style={{ backgroundColor: accentColor }}>
+                                        {headerAnnouncement || 'Bienvenue sur la plateforme'}
+                                    </div>
+                                    <div className="flex items-center justify-between gap-4 px-5 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-black" style={{ backgroundColor: accentColor }}>{siteName.charAt(0) || 'T'}</div>
+                                            <div className="font-black text-slate-900">{siteName || 'Tunidex'}</div>
+                                        </div>
+                                        <div className="hidden sm:flex flex-1 max-w-xs rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400">
+                                            {headerSearchPlaceholder || 'Rechercher...'}
+                                        </div>
+                                        <button type="button" className="rounded-xl px-4 py-2 text-sm font-bold text-white" style={{ backgroundColor: accentColor }}>{headerCtaLabel || "S'inscrire"}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                            <h2 className="text-lg font-bold text-slate-900 leading-tight">Footer premium</h2>
+                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Texte de marque, contact, confiance et copyright</p>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-8">
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Tagline</label>
+                                    <input value={footerTagline} onChange={(e) => setFooterTagline(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Description</label>
+                                    <textarea value={footerDescription} onChange={(e) => setFooterDescription(e.target.value)} className="theme-focus h-28 w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Email</label>
+                                        <input value={footerEmail} onChange={(e) => setFooterEmail(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Téléphone</label>
+                                        <input value={footerPhone} onChange={(e) => setFooterPhone(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">WhatsApp</label>
+                                        <input value={footerWhatsapp} onChange={(e) => setFooterWhatsapp(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Adresse</label>
+                                        <input value={footerAddress} onChange={(e) => setFooterAddress(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wider">Copyright</label>
+                                    <input value={footerCopyright} onChange={(e) => setFooterCopyright(e.target.value)} className="theme-focus w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-3 font-medium text-slate-700" />
+                                </div>
+                            </div>
+                            <div className="relative overflow-hidden rounded-[28px] border border-slate-800 bg-slate-950 p-6 text-white shadow-xl">
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(79,70,229,0.28),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(20,184,166,0.2),transparent_32%)]" />
+                                <div className="relative">
+                                    <div className="text-xs uppercase tracking-widest text-slate-500 font-bold mb-6">Aperçu footer</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div>
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className="h-11 w-11 rounded-2xl flex items-center justify-center text-white font-black" style={{ backgroundColor: accentColor }}>{siteName.charAt(0) || 'T'}</div>
+                                                <div>
+                                                    <div className="text-xl font-black">{siteName || 'Tunidex'}</div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">{footerTagline}</div>
+                                                </div>
+                                            </div>
+                                            <p className="text-sm leading-7 text-slate-300">{footerDescription}</p>
+                                        </div>
+                                        <div className="space-y-3 text-sm text-slate-300">
+                                            <div className="font-black uppercase tracking-widest text-white text-xs">Contact</div>
+                                            <div>{footerEmail}</div>
+                                            <div>{footerPhone}</div>
+                                            <div>WhatsApp: {footerWhatsapp}</div>
+                                            <div>{footerAddress}</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-8 border-t border-white/10 pt-4 text-xs text-slate-500">
+                                        © {new Date().getFullYear()} {siteName || 'Tunidex'}. {footerCopyright}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                )}
+
                 <div className="flex justify-end pt-6 sticky bottom-0 bg-slate-50/80 backdrop-blur-md p-4 -mx-4 rounded-t-3xl border-t border-slate-200 z-10">
                     <button
-                        onClick={() => onUpdateSiteConfig({ heroSlides, heroSlideHeight, accentColor, accentHoverColor, accentSoftColor, accentTextColor })}
+                        onClick={() => onUpdateSiteConfig({ heroSlides, heroSlideHeight, accentColor, accentHoverColor, accentSoftColor, accentTextColor, headerAnnouncement, headerSearchPlaceholder, headerCtaLabel, footerTagline, footerDescription, footerEmail, footerPhone, footerWhatsapp, footerAddress, footerCopyright })}
                         className="bg-indigo-600 text-white font-black py-4 px-16 rounded-2xl hover:bg-indigo-700 transition shadow-2xl shadow-indigo-300 flex items-center justify-center transform hover:-translate-y-1 active:scale-95 group"
                     >
                         <LucideIcons.Save size={20} className="mr-3 group-hover:rotate-12 transition-transform" />
@@ -1232,16 +1996,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
             <div className="space-y-8">
                 {/* Edit Category Modal Overlay */}
                 {editingCategory && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in-95 duration-200">
-                            <div className="p-6 border-b flex justify-between items-center bg-slate-50">
-                                <h3 className="font-bold text-xl text-slate-900 flex items-center">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto z-50 p-4 md:p-6 animate-in fade-in duration-200">
+                        <div className="my-4 w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100vh-2rem)] md:max-h-[calc(100vh-3rem)] flex flex-col">
+                            <div className="p-4 md:p-6 border-b flex justify-between items-center gap-4 bg-slate-50 shrink-0">
+                                <h3 className="font-bold text-lg md:text-xl text-slate-900 flex items-center min-w-0">
                                     <Edit className="mr-2 text-indigo-600" /> Modifier la Catégorie: {editingCategory.name}
                                 </h3>
                                 <button onClick={() => setEditingCategory(null)} className="text-slate-400 hover:text-slate-600 transition-colors"><X size={24} /></button>
                             </div>
-                            <div className="p-8">
-                                <form onSubmit={handleUpdateCategory} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="overflow-y-auto p-4 md:p-8">
+                                <form onSubmit={handleUpdateCategory} className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
                                     <div className="space-y-5">
                                         <div>
                                             <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Nom de la catégorie</label>
@@ -1250,6 +2014,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                         <div>
                                             <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Slug (URL)</label>
                                             <input className="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={editCatSlug} onChange={e => setEditCatSlug(e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Position d'affichage</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                className="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                                value={editCatOrder}
+                                                onChange={e => setEditCatOrder(e.target.value)}
+                                                placeholder="1 = première catégorie"
+                                            />
+                                            <p className="mt-1 text-[11px] text-slate-400">Plus le nombre est petit, plus la catégorie apparaît tôt.</p>
                                         </div>
                                         <div>
                                             <IconPicker label="Icône Lucide" value={editCatIcon} onChange={setEditCatIcon} />
@@ -1305,15 +2081,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
 
                 {/* Edit SubCategory Modal Overlay */}
                 {editingSubCategory && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                            <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto z-50 p-4 md:p-6 animate-in fade-in duration-200">
+                        <div className="my-4 w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100vh-2rem)] md:max-h-[calc(100vh-3rem)] flex flex-col">
+                            <div className="p-4 md:p-6 border-b flex justify-between items-center gap-4 bg-slate-50 shrink-0">
                                 <h3 className="font-bold text-lg text-slate-900 flex items-center">
                                     <Edit className="mr-2 text-indigo-600" /> Modifier Sous-Catégorie
                                 </h3>
                                 <button onClick={() => setEditingSubCategory(null)} className="text-slate-400 hover:text-slate-600 transition-colors"><X size={20} /></button>
                             </div>
-                            <div className="p-6 space-y-5">
+                            <div className="p-4 md:p-6 space-y-5 overflow-y-auto">
                                 <div>
                                     <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Nom</label>
                                     <input className="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={editSubName} onChange={e => setEditSubName(e.target.value)} />
@@ -1369,6 +2145,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Slug (URL)</label>
                                         <input className="w-full border p-2 rounded" placeholder="ex: software-apps" value={newCatSlug} onChange={e => setNewCatSlug(e.target.value)} required />
                                     </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Position d'affichage</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        className="w-full border p-2 rounded"
+                                        placeholder="1 = première catégorie, 2 = deuxième..."
+                                        value={newCatOrder}
+                                        onChange={e => setNewCatOrder(e.target.value)}
+                                    />
+                                    <p className="mt-1 text-[11px] text-slate-400">Utilise 1, 2, 3... pour contrôler l'ordre dans le header, la home et les listes.</p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -1468,7 +2257,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                     <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 font-bold bg-slate-50">Structure du Site</div>
                         <div className="max-h-[500px] overflow-y-auto">
-                            {categories.map(cat => (
+                            {orderedCategories.map((cat, index) => (
                                 <div key={cat.id} className="border-b border-slate-50 last:border-0">
                                     <div className="px-6 py-3 bg-slate-50/50 flex justify-between items-center">
                                         <div className="font-bold text-slate-900 flex items-center">
@@ -1479,9 +2268,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                             )}
                                             <DynamicIcon name={cat.icon} className="w-4 h-4 mr-2 text-slate-500" /> 
                                             {cat.name}
+                                            <span className="ml-3 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                                                Ordre {cat.order || 0}
+                                            </span>
                                             <button onClick={() => startEditingCategory(cat)} className="ml-2 text-slate-400 hover:text-indigo-600 transition-colors" title="Modifier la catégorie"><Edit size={14} /></button>
                                         </div>
-                                        <button onClick={() => handleDeleteCategory(cat.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleMoveCategory(cat.id, 'up')}
+                                                disabled={index === 0}
+                                                className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-30"
+                                                title="Monter"
+                                            >
+                                                <LucideIcons.ChevronUp size={15} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleMoveCategory(cat.id, 'down')}
+                                                disabled={index === orderedCategories.length - 1}
+                                                className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-30"
+                                                title="Descendre"
+                                            >
+                                                <LucideIcons.ChevronDown size={15} />
+                                            </button>
+                                            <button onClick={() => handleDeleteCategory(cat.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
+                                        </div>
                                     </div>
                                     <div className="px-6 py-3 grid grid-cols-2 md:grid-cols-3 gap-3">
                                         {cat.subCategories?.map(sub => (
@@ -1590,6 +2402,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
 
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center">
+                      <Package size={16} className="mr-2 text-indigo-600" /> Format de Vente
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewListingIsPackage(false)}
+                        className={`p-3 rounded-lg border text-sm font-bold transition-all ${!newListingIsPackage ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'}`}
+                      >
+                        Produit simple
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewListingIsPackage(true)}
+                        className={`p-3 rounded-lg border text-sm font-bold transition-all ${newListingIsPackage ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'}`}
+                      >
+                        Package
+                      </button>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Un package regroupe plusieurs produits existants et affiche automatiquement l’économie client.
+                  </p>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center">
                       <Shield size={16} className="mr-2 text-indigo-600" /> Type de Produit & Accès
                   </label>
                   <div className="space-y-4">
@@ -1599,14 +2436,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                   key={type}
                                   type="button"
                                   onClick={() => setNewListingProductType(type)}
+                                  disabled={newListingIsPackage}
                                   className={`p-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${newListingProductType === type ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'}`}
                               >
                                   {type === ProductType.STANDARD ? 'Standard' : type === ProductType.LOGIN_CREDENTIALS ? 'Logins Pool' : 'Clé Unique'}
                               </button>
                           ))}
                       </div>
+                      {newListingIsPackage && (
+                          <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                              Le package utilise automatiquement un accès standard. Les éléments inclus restent gérés dans leur propre stock.
+                          </div>
+                      )}
 
-                      {newListingProductType === ProductType.LOGIN_CREDENTIALS && (
+                      {!newListingIsPackage && newListingProductType === ProductType.LOGIN_CREDENTIALS && (
                           <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                               <div className="flex justify-between items-center">
                                   <label className="text-xs font-bold uppercase text-slate-500">Pool de Logins/Passwords</label>
@@ -1643,7 +2486,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                           </div>
                       )}
 
-                      {newListingProductType === ProductType.KEY && (
+                      {!newListingIsPackage && newListingProductType === ProductType.KEY && (
                           <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                               <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Clé du Produit (Sera envoyée à tous les clients)</label>
                               <input 
@@ -1657,6 +2500,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                       )}
                   </div>
               </div>
+
+              {newListingIsPackage && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 flex items-center">
+                        <Package size={16} className="mr-2 text-indigo-600" /> Composition du Package
+                      </label>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Sélectionne plusieurs produits déjà présents dans le stock puis ajuste leur quantité.
+                      </p>
+                    </div>
+                    <div className="min-w-[220px] rounded-xl bg-white border border-slate-200 p-3 text-sm">
+                      <div className="flex justify-between text-slate-500">
+                        <span>Valeur séparée</span>
+                        <span className="font-bold text-slate-900">{packageOriginalTotal.toFixed(2)} TND</span>
+                      </div>
+                      <div className="mt-2 flex justify-between text-slate-500">
+                        <span>Prix package</span>
+                        <span className="font-bold text-slate-900">{draftPackagePrice.toFixed(2)} TND</span>
+                      </div>
+                      <div className="mt-2 flex justify-between text-emerald-600">
+                        <span>Gain client</span>
+                        <span className="font-black">{packageSavings.toFixed(2)} TND</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                    {availablePackageListings.map((listing) => {
+                      const selectedItem = newListingPackageItems.find((item) => item.includedListingId === listing.id);
+                      const checked = Boolean(selectedItem);
+
+                      return (
+                        <label key={listing.id} className={`flex items-center gap-4 rounded-xl border p-3 transition-all ${checked ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'}`}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={checked}
+                            onChange={() => togglePackageItem(listing.id)}
+                          />
+                          <img src={listing.imageUrl} className="h-12 w-12 rounded-lg object-cover border border-slate-100" />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-slate-900 truncate">{listing.title}</div>
+                            <div className="text-xs text-slate-500">
+                              {getListingFinalPrice(listing).toFixed(2)} TND • Stock {listing.stock}
+                            </div>
+                          </div>
+                          <input
+                            type="number"
+                            min="1"
+                            value={selectedItem?.quantity || 1}
+                            disabled={!checked}
+                            onChange={(e) => updatePackageItemQuantity(listing.id, Number(e.target.value))}
+                            className="w-20 rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                          />
+                        </label>
+                      );
+                    })}
+                    {availablePackageListings.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
+                        Aucun produit standard disponible pour composer un package.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                   <ImageInput 
@@ -1684,10 +2594,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                 </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea className="w-full border rounded p-2 h-32" value={generatedDescription} onChange={(e) => setGeneratedDescription(e.target.value)} required></textarea>
-              </div>
+              <RichTextEditor
+                label="Description"
+                value={generatedDescription}
+                onChange={setGeneratedDescription}
+                required
+              />
+
+              {!newListingIsPackage && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <label className="block text-sm font-black text-slate-800">Variantes du produit</label>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Donnez un nom au choix, par exemple Durée, Taille ou Type de compte. Le store affichera automatiquement “À partir de” avec le prix le plus bas.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addListingVariant}
+                      className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                    >
+                      Ajouter variante
+                    </button>
+                  </div>
+                  <div className="mb-4">
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Nom du choix</label>
+                    <input
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                      placeholder="Ex: Durée, Taille, Type de compte"
+                      value={newListingVariantLabel}
+                      onChange={(e) => setNewListingVariantLabel(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    {newListingVariants.map((variant, index) => (
+                      <div key={index} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_130px_90px_40px]">
+                        <input
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                          placeholder="Nom variante, ex: 1 mois"
+                          value={variant.name}
+                          onChange={(e) => updateListingVariant(index, { name: e.target.value })}
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                          placeholder="Prix"
+                          value={variant.price}
+                          onChange={(e) => updateListingVariant(index, { price: Number(e.target.value) })}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                          placeholder="Ordre"
+                          value={variant.order || index + 1}
+                          onChange={(e) => updateListingVariant(index, { order: Number(e.target.value) })}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeListingVariant(index)}
+                          className="rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          title="Supprimer la variante"
+                        >
+                          <Trash2 size={16} className="mx-auto" />
+                        </button>
+                      </div>
+                    ))}
+                    {newListingVariants.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-400">
+                        Aucune variante. Le produit utilisera le prix simple ci-dessous.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -1773,7 +2756,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                               tunidex.com › products › {newListingTitle.toLowerCase().replace(/\s+/g, '-')}
                           </div>
                           <div className="text-[#545454] text-sm line-clamp-2">
-                              {newListingMetaDesc || generatedDescription || 'La description de votre produit apparaîtra ici dans les résultats de recherche Google...'}
+                              {newListingMetaDesc || richTextToPlainText(generatedDescription) || 'La description de votre produit apparaîtra ici dans les résultats de recherche Google...'}
                           </div>
                       </div>
                   </div>
@@ -2084,7 +3067,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                      <td className="px-6 py-4 flex items-center space-x-3">
                                          <img src={l.imageUrl} className="w-10 h-10 rounded object-cover border border-slate-100" />
                                          <div>
-                                             <div className="font-bold text-slate-900 text-sm">{l.title}</div>
+                                             <div className="flex items-center gap-2">
+                                               <div className="font-bold text-slate-900 text-sm">{l.title}</div>
+                                               {l.isPackage && (
+                                                 <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-700">Pack</span>
+                                               )}
+                                             </div>
                                              <div className="text-[10px] text-slate-400 uppercase font-bold">{l.game}</div>
                                          </div>
                                      </td>
@@ -2102,9 +3090,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                          </span>
                                      </td>
                                      <td className="px-6 py-4">
-                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${l.isInstant ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
-                                             {l.isInstant ? 'INSTANT' : 'MANUEL'}
-                                         </span>
+                                         <div className="flex flex-wrap gap-2">
+                                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${l.isInstant ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
+                                               {l.isInstant ? 'INSTANT' : 'MANUEL'}
+                                           </span>
+                                           {l.isPackage && (
+                                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">
+                                               PACKAGE
+                                             </span>
+                                           )}
+                                         </div>
                                      </td>
                                      <td className="px-6 py-4">
                                          <div className="flex space-x-2">

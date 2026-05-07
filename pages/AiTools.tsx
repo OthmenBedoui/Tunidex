@@ -2,6 +2,7 @@ import React from 'react';
 import { Bot, Sparkles, Code, BrainCircuit, Star, Zap, Search, Filter, LayoutGrid } from 'lucide-react';
 import { Listing } from '../types';
 import PriceDisplay from '../components/PriceDisplay';
+import { richTextToPlainText } from '../utils/richText';
 
 interface AiToolsProps {
   listings: Listing[];
@@ -187,7 +188,7 @@ const AiTools: React.FC<AiToolsProps> = ({ listings, onViewProduct }) => {
                     {listing.title}
                   </h3>
                   
-                  <p className="text-sm text-slate-500 mb-4 line-clamp-2">{listing.description}</p>
+                  <p className="text-sm text-slate-500 mb-4 line-clamp-2">{richTextToPlainText(listing.description)}</p>
                   
                   <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
                     <PriceDisplay listing={listing} />

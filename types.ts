@@ -41,6 +41,22 @@ export interface LoginCredential {
   createdAt: string;
 }
 
+export interface PackageItem {
+  id?: string;
+  packageListingId?: string;
+  includedListingId: string;
+  quantity: number;
+  includedListing?: Listing;
+}
+
+export interface ProductVariant {
+  id?: string;
+  listingId?: string;
+  name: string;
+  price: number;
+  order?: number;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -49,6 +65,7 @@ export interface Category {
   imageUrl?: string; // Hero background
   gradient?: string; // CSS class for hero
   description?: string;
+  order?: number;
   subCategories?: SubCategory[];
 }
 
@@ -85,6 +102,8 @@ export interface Listing {
   description: string;
   price: number;
   isArchived?: boolean;
+  isPackage?: boolean;
+  variantLabel?: string;
   discountPercent?: number;
   discountType?: DiscountType;
   discountValue?: number;
@@ -115,6 +134,8 @@ export interface Listing {
   productType: ProductType;
   credentials?: LoginCredential[]; // Pool of logins/passwords
   staticKey?: string; // A single key for all buyers
+  packageItems?: PackageItem[];
+  variants?: ProductVariant[];
 }
 
 export interface SiteConfig {
@@ -128,6 +149,16 @@ export interface SiteConfig {
   accentHoverColor?: string;
   accentSoftColor?: string;
   accentTextColor?: string;
+  headerAnnouncement?: string;
+  headerSearchPlaceholder?: string;
+  headerCtaLabel?: string;
+  footerTagline?: string;
+  footerDescription?: string;
+  footerEmail?: string;
+  footerPhone?: string;
+  footerWhatsapp?: string;
+  footerAddress?: string;
+  footerCopyright?: string;
   // SMTP Configuration
   smtpMailerName?: string;
   smtpHost?: string;
@@ -146,6 +177,7 @@ export interface SiteConfig {
 export interface HeroSlide {
   id: string;
   imageUrl: string;
+  mediaType?: 'image' | 'video';
   badge?: string;
   title?: string;
   subtitle?: string;
@@ -157,6 +189,8 @@ export interface HeroSlide {
 export interface CartItem {
   id: string;
   listingId: string;
+  variantId?: string;
+  variant?: ProductVariant;
   quantity: number;
   listing: Listing;
 }
@@ -167,6 +201,8 @@ export interface OrderItem {
   quantity: number;
   priceSnapshot: number;
   titleSnapshot: string;
+  variantId?: string;
+  variantSnapshot?: string;
   deliveredContent?: string; // The login/pass or key delivered to the customer
 }
 
@@ -197,6 +233,7 @@ export interface GuestCheckoutPayload {
   paymentMethod?: string;
   items: Array<{
     listingId: string;
+    variantId?: string;
     quantity: number;
   }>;
 }

@@ -1,6 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, LogOut, Shield, Store } from 'lucide-react';
+import { LayoutDashboard, LogOut, Moon, Shield, Store, Sun } from 'lucide-react';
 import { SiteConfig, User } from '../types';
+import { useThemeMode } from '../utils/themeMode';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -21,6 +22,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
   notification,
   onCloseNotification
 }) => {
+  const { themeMode, toggleThemeMode } = useThemeMode();
+
   return (
     <div className="min-h-screen bg-slate-100">
       {notification && notification.show && (
@@ -49,6 +52,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleThemeMode}
+              className="theme-mode-toggle border-white/10 bg-white/10 text-white hover:bg-white/15"
+              aria-label={themeMode === 'dark' ? 'Activer le thème clair' : 'Activer le thème sombre'}
+              title={themeMode === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            >
+              {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
             <div className="hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-2 md:block">
               <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Connecté en tant que</div>
               <div className="flex items-center gap-2 text-sm font-bold">

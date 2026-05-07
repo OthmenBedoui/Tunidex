@@ -30,7 +30,7 @@ async function startServer() {
     }
     next();
   });
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '25mb' }));
 
   // Documentation
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -44,8 +44,8 @@ async function startServer() {
 
   app.use((error: Error & { type?: string; status?: number }, req: Request, res: Response, next: NextFunction) => {
     if (error?.type === 'entity.too.large') {
-      console.error(`[http] payload too large method=${req.method} path=${req.path} limit=10mb`);
-      return res.status(413).json({ error: 'Payload too large. Reduce the image size and try again.' });
+      console.error(`[http] payload too large method=${req.method} path=${req.path} limit=25mb`);
+      return res.status(413).json({ error: 'Payload too large. Reduce the file or image size and try again.' });
     }
 
     if (error) {
