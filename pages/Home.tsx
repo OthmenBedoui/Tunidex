@@ -26,92 +26,6 @@ const isVideoMedia = (src?: string, mediaType?: 'image' | 'video') => {
   return src.startsWith('data:video/') || /\.(mp4|webm)(\?|#|$)/i.test(src);
 };
 
-const fallbackHeroImages = [
-  'https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1635776062127-d379bfcba9f8?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1522869635100-1f4d0684d91f?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&q=80',
-];
-
-const HeroOrbitSection: React.FC<{
-  listings: Listing[];
-  categories: Category[];
-  onViewProduct: (listing: Listing) => void;
-}> = ({ listings, categories, onViewProduct }) => {
-  const visualItems = listings.length > 0
-    ? listings.slice(0, 9).map((listing) => ({
-        id: listing.id,
-        title: listing.title,
-        imageUrl: listing.imageUrl,
-        listing,
-      }))
-    : fallbackHeroImages.map((imageUrl, index) => ({
-        id: `fallback-${index}`,
-        title: categories[index % Math.max(categories.length, 1)]?.name || 'Tunidex',
-        imageUrl,
-        listing: undefined,
-      }));
-
-  const rings = [0, 1, 2].map((ringIndex) =>
-    Array.from({ length: 9 }, (_, index) => visualItems[(index + ringIndex * 3) % visualItems.length])
-  );
-
-  return (
-    <section className="section_hero_tunidex">
-      <div className="hero_orbit_bg" />
-      <div className="hero_orbit_content">
-        <div className="hero_orbit_badge">Marketplace digitale premium</div>
-        <h1 className="hero_orbit_title">
-          Achetez plus vite avec<br />
-          <span>comptes, abonnements et services digitaux</span>
-        </h1>
-        <p className="hero_orbit_text">
-          Une expérience store plus fluide pour trouver vos produits, choisir vos variantes et recevoir vos accès avec un parcours clair.
-        </p>
-        <div className="hero_orbit_actions">
-          <button type="button" onClick={() => document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })} className="hero_orbit_button">
-            Explorer le store
-          </button>
-          <button
-            type="button"
-            onClick={() => visualItems[0]?.listing && onViewProduct(visualItems[0].listing)}
-            className="hero_orbit_arrow"
-          >
-            <span>Voir produits</span>
-            <ArrowRight size={20} />
-          </button>
-        </div>
-      </div>
-
-      <div className="hero_3d_visual" aria-hidden="true">
-        <div className="hero_3d_wrap">
-          {rings.map((ring, ringIndex) => (
-            <div key={ringIndex} className={`hero_3d_group hero_3d_group_${ringIndex + 1}`}>
-              {ring.map((item, index) => (
-                <div key={`${item.id}-${ringIndex}-${index}`} className="hero_3d_card" style={{ ['--item-index' as string]: index }}>
-                  <img src={item.imageUrl} alt="" className="hero_3d_image" />
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="hero_orbit_rating">
-        <div>Rated 4.9/5 by Tunidex clients</div>
-        <div className="hero_orbit_stars">
-          {[...Array(5)].map((_, index) => <Star key={index} size={15} fill="currentColor" />)}
-        </div>
-      </div>
-    </section>
-  );
-};
-
 const HorizontalListingCard: React.FC<{ listing: Listing; onViewProduct: (listing: Listing) => void }> = ({ listing, onViewProduct }) => {
   const hasDiscount = hasListingDiscount(listing);
   const discountedPrice = getListingFinalPrice(listing);
@@ -261,8 +175,6 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
 
   return (
     <div className="space-y-16 animate-in fade-in duration-500">
-      <HeroOrbitSection listings={featuredListings} categories={categories} onViewProduct={onViewProduct} />
-
       {/* Hero Section */}
       <div className="relative rounded-3xl overflow-hidden bg-slate-900 shadow-2xl" style={{ height: `${siteConfig.heroSlideHeight || 440}px` }}>
         {isVideoMedia(activeSlide?.imageUrl, activeSlide?.mediaType) ? (
