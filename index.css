@@ -34,6 +34,38 @@ body {
     background: var(--surface-page);
 }
 
+@keyframes notification-check {
+    0% {
+        transform: scale(0.72) rotate(-12deg);
+        opacity: 0;
+    }
+    60% {
+        transform: scale(1.12) rotate(4deg);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+}
+
+@keyframes floating-brand-scroll {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(calc(-50% - 0.5rem));
+    }
+}
+
+.floating-brand-marquee {
+    animation: floating-brand-scroll 26s linear infinite;
+}
+
+.floating-brand-marquee:hover {
+    animation-play-state: paused;
+}
+
 .theme-text-accent {
     color: var(--theme-accent);
 }

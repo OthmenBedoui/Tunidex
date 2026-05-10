@@ -91,6 +91,27 @@ model Listing {
   imageUrl          String
   gallery           String       @default("[]") // JSON string array
   game              String?
+  platform          String?
+  region            String?
+  activationCountry String?
+  activationGuideTitle String?
+  activationGuideContent String?
+  restrictionsTitle String?
+  restrictionsContent String?
+  regionTitle       String?
+  regionContent     String?
+  systemRequirementsEnabled Boolean @default(false)
+  systemRequirementsPlatform String?
+  minimumOs         String?
+  minimumMemory     String?
+  minimumStorage    String?
+  minimumProcessor  String?
+  minimumGraphics   String?
+  recommendedOs     String?
+  recommendedMemory String?
+  recommendedStorage String?
+  recommendedProcessor String?
+  recommendedGraphics String?
   stock             Int          @default(1)
   deliveryTimeHours Int          @default(24)
   isInstant         Boolean      @default(true)

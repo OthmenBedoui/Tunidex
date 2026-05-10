@@ -41,58 +41,70 @@ const Layout: React.FC<LayoutProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const { themeMode, toggleThemeMode } = useThemeMode();
+  const logoSize = Math.min(80, Math.max(24, Number(siteConfig.logoSize || 32)));
+  const footerLogoSize = Math.min(88, Math.max(32, logoSize + 8));
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Toast Notification Popup */}
       {notification && notification.show && (
-        <div className="fixed top-24 right-4 z-[100] animate-in slide-in-from-right duration-300 fade-in">
-          <div className={`bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center space-x-4 border-l-4 ${
-            notification.type === 'error' ? 'border-red-500' : 'border-green-500'
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`w-full max-w-md overflow-hidden rounded-3xl border bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-3 duration-300 ${
+            notification.type === 'error' ? 'border-red-100' : 'border-emerald-100'
           }`}>
-            <div className={`p-2 rounded-full ${
-              notification.type === 'error' ? 'bg-red-500/20' : 'bg-green-500/20'
-            }`}>
-              {notification.type === 'error' ? (
-                <AlertCircle size={20} className="text-red-400" />
-              ) : (
-                <CheckCircle size={20} className="text-green-400" />
-              )}
+            <div className={`h-1.5 ${notification.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+                  notification.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
+                }`}>
+                  {notification.type === 'error' ? (
+                    <AlertCircle size={28} />
+                  ) : (
+                    <CheckCircle size={28} className="animate-[notification-check_450ms_ease-out]" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-lg font-black text-slate-900">{notification.type === 'error' ? 'Erreur' : 'Succès'}</div>
+                  <div className="mt-1 text-sm leading-6 text-slate-600">{notification.message}</div>
+                </div>
+                {notification.type === 'error' && (
+                  <button
+                    type="button"
+                    onClick={onCloseNotification}
+                    className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Fermer la notification"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
             </div>
-            <div>
-              <h4 className="font-bold text-sm">{notification.type === 'error' ? 'Erreur' : 'Succès !'}</h4>
-              <p className="text-xs text-slate-300">{notification.message}</p>
-            </div>
-            <button onClick={onCloseNotification} className="text-slate-400 hover:text-white pl-4">
-              <X size={16} />
-            </button>
           </div>
         </div>
       )}
 
-      <div className="theme-bg-accent text-white text-xs py-2 px-4 text-center font-black tracking-wide">
+      <div className="bg-black text-white text-xs py-2 px-4 text-center font-black tracking-wide">
         {siteConfig.headerAnnouncement || 'Bienvenue sur la première plateforme digitale en Tunisie !'}
       </div>
 
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-black text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <button 
-                className="p-2 -ml-2 mr-2 md:hidden text-slate-500 hover:text-slate-700"
+                className="p-2 -ml-2 mr-2 md:hidden text-slate-300 hover:text-white"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               >
                 <Menu size={24} />
               </button>
               <div className="flex items-center cursor-pointer" onClick={() => navigateTo('home')}>
                 {siteConfig.logoUrl ? (
-                  <img src={siteConfig.logoUrl} alt={siteConfig.siteName} className="h-8 w-auto mr-2" />
+                  <img src={siteConfig.logoUrl} alt={siteConfig.siteName} className="w-auto object-contain" style={{ height: `${logoSize}px` }} />
                 ) : (
-                  <div className="theme-bg-accent text-white p-1.5 rounded mr-2 font-bold text-xl">
+                  <div className="theme-bg-accent text-white rounded font-bold text-xl flex items-center justify-center" style={{ height: `${logoSize}px`, width: `${logoSize}px` }}>
                     {siteConfig.siteName.charAt(0)}
                   </div>
                 )}
-                <span className="font-bold text-xl tracking-tight text-slate-900">{siteConfig.siteName}</span>
               </div>
             </div>
 
@@ -103,7 +115,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm transition duration-150 ease-in-out"
+                  className="block w-full pl-10 pr-3 py-2 border border-white/10 rounded-lg leading-5 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm transition duration-150 ease-in-out"
                   placeholder={siteConfig.headerSearchPlaceholder || 'Rechercher jeux, items, comptes...'}
                 />
               </div>
@@ -113,7 +125,7 @@ const Layout: React.FC<LayoutProps> = ({
               <button
                 type="button"
                 onClick={toggleThemeMode}
-                className="theme-mode-toggle"
+                className="theme-mode-toggle border-white/10 bg-white/10 text-white hover:bg-white/15"
                 aria-label={themeMode === 'dark' ? 'Activer le thème clair' : 'Activer le thème sombre'}
                 title={themeMode === 'dark' ? 'Mode clair' : 'Mode sombre'}
               >
@@ -121,10 +133,10 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
 
               {/* Cart Button with Bubble */}
-              <button className="p-2 text-slate-500 relative transition-transform active:scale-95 theme-text-accent" onClick={() => navigateTo('cart')}>
+              <button className="p-2 text-slate-200 relative transition-transform active:scale-95 hover:text-white" onClick={() => navigateTo('cart')}>
                 <ShoppingCart size={24} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 theme-bg-accent text-white text-xs flex items-center justify-center rounded-full font-bold animate-in zoom-in duration-200 border-2 border-white">
+                  <span className="absolute -top-1 -right-1 h-5 w-5 theme-bg-accent text-white text-xs flex items-center justify-center rounded-full font-bold animate-in zoom-in duration-200 border-2 border-black">
                     {cartCount}
                   </span>
                 )}
@@ -132,7 +144,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               {user.role === UserRole.GUEST ? (
                 <div className="flex items-center space-x-2 ml-2">
-                  <button onClick={() => navigateTo('login')} className="theme-text-accent font-medium px-3 py-2 text-sm flex items-center"><LogIn size={16} className="mr-1" /> Connexion</button>
+                  <button onClick={() => navigateTo('login')} className="text-white font-medium px-3 py-2 text-sm flex items-center hover:text-slate-200"><LogIn size={16} className="mr-1" /> Connexion</button>
                   <button onClick={() => navigateTo('register')} className="theme-btn px-4 py-2 rounded-lg text-sm font-bold shadow-sm">{siteConfig.headerCtaLabel || "S'inscrire"}</button>
                 </div>
               ) : (
@@ -160,17 +172,17 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </div>
 
-        <div className="bg-white border-b border-slate-100">
+        <div className="border-t border-white/10 bg-black">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
              <div className="flex space-x-6 text-sm font-medium py-3 overflow-x-auto no-scrollbar">
-                <button onClick={() => navigateTo('home')} className={`whitespace-nowrap flex items-center ${currentPage === 'home' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}>
+                <button onClick={() => navigateTo('home')} className={`whitespace-nowrap flex items-center ${currentPage === 'home' ? 'text-white' : 'text-slate-300 hover:text-white'}`}>
                   Tout Voir
                 </button>
                 {categories.map((cat) => (
                    <button 
                     key={cat.id}
                     onClick={() => navigateTo('category', cat.slug)}
-                    className={`whitespace-nowrap flex items-center transition-colors text-slate-600 hover:text-indigo-600`}
+                    className="whitespace-nowrap flex items-center transition-colors text-slate-300 hover:text-white"
                   >
                     <DynamicIcon name={cat.icon} className="mr-1" />
                     {cat.name}
@@ -181,7 +193,7 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={currentPage === 'product' ? 'flex-grow w-full' : 'flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {children}
       </main>
 
@@ -192,14 +204,13 @@ const Layout: React.FC<LayoutProps> = ({
             <div>
               <div className="flex items-center gap-3 mb-5">
                 {siteConfig.logoUrl ? (
-                  <img src={siteConfig.logoUrl} alt={siteConfig.siteName} className="h-10 w-auto rounded-lg bg-white/5 p-1" />
+                  <img src={siteConfig.logoUrl} alt={siteConfig.siteName} className="w-auto rounded-lg bg-white/5 p-1 object-contain" style={{ height: `${footerLogoSize}px` }} />
                 ) : (
-                  <div className="theme-bg-accent h-11 w-11 rounded-2xl flex items-center justify-center font-black text-white shadow-lg">
+                  <div className="theme-bg-accent rounded-2xl flex items-center justify-center font-black text-white shadow-lg" style={{ height: `${footerLogoSize}px`, width: `${footerLogoSize}px` }}>
                     {siteConfig.siteName.charAt(0)}
                   </div>
                 )}
                 <div>
-                  <div className="text-2xl font-black tracking-tight">{siteConfig.siteName}</div>
                   <div className="text-xs font-bold uppercase tracking-[0.28em] text-slate-400">{siteConfig.footerTagline || 'Marketplace digitale premium'}</div>
                 </div>
               </div>
@@ -269,8 +280,8 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
 
           <div className="mt-12 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
-            <div>© {new Date().getFullYear()} {siteConfig.siteName}. {siteConfig.footerCopyright || 'Tous droits réservés.'}</div>
-            <div className="font-bold uppercase tracking-[0.24em] text-slate-600">Tunidex Premium Platform</div>
+            <div>© {new Date().getFullYear()} {siteConfig.footerCopyright || 'Tous droits réservés.'}</div>
+            <div className="font-bold uppercase tracking-[0.24em] text-slate-600">Plateforme premium</div>
           </div>
         </div>
       </footer>

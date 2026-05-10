@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Crown, Zap, User, MapPin, Phone } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Crown, Zap, User, MapPin, Phone, X } from 'lucide-react';
 import { SubscriptionTier, User as UserType, UserRole } from '../types';
 import { api } from '../services/api';
 
@@ -13,6 +13,7 @@ interface SubscriptionProps {
 const Subscription: React.FC<SubscriptionProps> = ({ user, onSubscribe, navigateTo, onRequireLogin }) => {
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionTier | null>(null);
   const [step, setStep] = useState(1); // 1: Select Plan, 2: Details
+  const [popup, setPopup] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -41,16 +42,59 @@ const Subscription: React.FC<SubscriptionProps> = ({ user, onSubscribe, navigate
             tier: selectedPlan,
             ...formData
         });
-        alert(`Félicitations ! Vous êtes maintenant ${selectedPlan}.`);
+        setPopup({
+            type: 'success',
+            title: 'Abonnement activé',
+            message: `Félicitations ! Vous êtes maintenant ${selectedPlan}.`
+        });
         onSubscribe(selectedPlan);
-        navigateTo('home');
+        window.setTimeout(() => navigateTo('home'), 1500);
     } catch {
-        alert("Erreur lors de l'abonnement.");
+        setPopup({
+            type: 'error',
+            title: 'Abonnement impossible',
+            message: "Erreur lors de l'abonnement."
+        });
     }
   };
 
+  const popupElement = popup && (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className={`w-full max-w-md overflow-hidden rounded-3xl border bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-3 duration-300 ${
+        popup.type === 'success' ? 'border-emerald-100' : 'border-red-100'
+      }`}>
+        <div className={`h-1.5 ${popup.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+              popup.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+            }`}>
+              {popup.type === 'success' ? <CheckCircle2 size={28} className="animate-[notification-check_450ms_ease-out]" /> : <AlertCircle size={28} />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-lg font-black text-slate-900">{popup.title}</div>
+              <div className="mt-1 text-sm leading-6 text-slate-600">{popup.message}</div>
+            </div>
+            {popup.type === 'error' && (
+              <button
+                type="button"
+                onClick={() => setPopup(null)}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Fermer la notification"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   if (step === 2 && selectedPlan) {
     return (
+      <>
+        {popupElement}
         <div className="max-w-2xl mx-auto py-12 px-4">
             <button onClick={() => setStep(1)} className="mb-6 text-slate-500 hover:text-indigo-600">← Changer de plan</button>
             <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
@@ -97,10 +141,13 @@ const Subscription: React.FC<SubscriptionProps> = ({ user, onSubscribe, navigate
                 </form>
             </div>
         </div>
+      </>
     );
   }
 
   return (
+    <>
+    {popupElement}
     <div className="py-12 max-w-6xl mx-auto px-4">
       <div className="text-center max-w-3xl mx-auto mb-16">
         <h1 className="text-4xl font-bold text-slate-900 mb-4">Upgradez votre Expérience</h1>
@@ -122,6 +169,7 @@ const Subscription: React.FC<SubscriptionProps> = ({ user, onSubscribe, navigate
         ))}
       </div>
     </div>
+    </>
   );
 };
 

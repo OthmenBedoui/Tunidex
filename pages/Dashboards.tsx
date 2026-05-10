@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Package, TrendingUp, DollarSign, Plus, Loader2, Zap, Crown, Users, Shield, FolderTree, Trash2, Edit, LayoutGrid, Save, X, Settings, User as UserIcon, Clock, History } from 'lucide-react';
-import { User, Order, OrderStatus, Listing, UserRole, Category, SubCategory, ProductType, LoginCredential, SiteConfig, HeroSlide, DiscountType, ProductVariant } from '../types';
+import { User, Order, OrderStatus, Listing, UserRole, Category, SubCategory, ProductType, LoginCredential, SiteConfig, HeroSlide, HeroPromoBanner, FloatingBrandCard, DiscountType, ProductVariant, StoreSectionConfig } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { generateListingDescription } from '../services/geminiService';
 import { api } from '../services/api';
@@ -10,6 +10,7 @@ import { ImageInput } from '../components/ImageInput';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { getListingDiscountLabel, getListingFinalPrice, getPackageOriginalTotal, getPackageSavings, hasListingDiscount } from '../utils/pricing';
 import { richTextToPlainText, sanitizeRichText } from '../utils/richText';
+import { getMergedStoreSections, STORE_SECTION_DEFINITIONS } from '../utils/storeSections';
 
 interface AdminDashboardProps {
   orders: Order[];
@@ -25,8 +26,17 @@ interface AdminDashboardProps {
   onUpdateSiteConfig: (config: Partial<SiteConfig>) => void;
 }
 
+const isImageIconValue = (value?: string) => {
+  const normalized = value?.trim() || '';
+  return /^(https?:\/\/|data:image\/|blob:|\/)/i.test(normalized);
+};
+
 // Helper for Icon Preview with robust lookup
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
+  if (isImageIconValue(name)) {
+    return <img src={name} alt="" className={`${className || 'w-6 h-6'} object-contain`} referrerPolicy="no-referrer" />;
+  }
+
   const icons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>;
   const IconComponent = icons[name] || icons[name.trim()] || icons.HelpCircle;
   return <IconComponent size={24} className={className} />;
@@ -140,6 +150,155 @@ const inferSlideMediaType = (src: string): HeroSlide['mediaType'] => (
 
 const formatBytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
 
+const SYSTEM_PLATFORM_OPTIONS = [
+  'Windows',
+  'Windows / macOS',
+  'Windows / Linux',
+  'macOS',
+  'Linux',
+  'SteamOS'
+];
+
+const PRODUCT_REGION_OPTIONS = [
+  'Global',
+  'Tunisia',
+  'Algeria',
+  'Morocco',
+  'Libya',
+  'Egypt',
+  'France',
+  'Germany',
+  'Italy',
+  'Spain',
+  'United Kingdom',
+  'United States',
+  'Canada',
+  'Europe',
+  'MENA',
+  'Middle East',
+  'Turkey',
+  'Saudi Arabia',
+  'United Arab Emirates',
+  'Brazil',
+  'Argentina',
+  'Japan',
+  'South Korea',
+  'Singapore',
+  'Australia'
+];
+
+const SYSTEM_OS_OPTIONS = [
+  'Windows 11 (64-BIT Required)',
+  'Windows 10 (64-BIT Required)',
+  'Windows 10 / 11 (64-BIT Required)',
+  'Windows 8.1 (64-BIT Required)',
+  'Windows 7 SP1 (64-BIT Required)',
+  'macOS 14 Sonoma',
+  'macOS 13 Ventura',
+  'macOS 12 Monterey',
+  'Ubuntu 22.04 LTS (64-BIT)',
+  'Ubuntu 20.04 LTS (64-BIT)',
+  'SteamOS 3.0'
+];
+
+const SYSTEM_MEMORY_OPTIONS = [
+  '2 GB RAM',
+  '4 GB RAM',
+  '6 GB RAM',
+  '8 GB RAM',
+  '12 GB RAM',
+  '16 GB RAM',
+  '24 GB RAM',
+  '32 GB RAM'
+];
+
+const SYSTEM_STORAGE_OPTIONS = [
+  '1 GB available space',
+  '2 GB available space',
+  '4 GB available space',
+  '8 GB available space',
+  '16 GB available space',
+  '20 GB available space',
+  '25 GB available space',
+  '30 GB available space',
+  '40 GB available space',
+  '50 GB available space',
+  '60 GB available space',
+  '80 GB available space',
+  '100 GB available space',
+  '150 GB available space'
+];
+
+const SYSTEM_PROCESSOR_OPTIONS = [
+  'Intel Core i3-6100 or AMD FX-6300',
+  'Intel Core i5-2500K or AMD FX-8350',
+  'Intel Core i5-4460 or AMD Ryzen 3 1200',
+  'Intel Core i5-6600K or AMD Ryzen 5 1600',
+  'Intel Core i7-4790K or AMD Ryzen 5 1500X',
+  'Intel Core i7-7700 or AMD Ryzen 5 2600',
+  'Intel Core i5-10400 or AMD Ryzen 5 3600',
+  'Intel Core i7-9700K or AMD Ryzen 7 3700X',
+  'Intel Core i5-12600K or AMD Ryzen 5 5600X',
+  'Intel Core i7-12700K or AMD Ryzen 7 5800X',
+  'Intel Core i5-13600K or AMD Ryzen 5 7600'
+];
+
+const SYSTEM_GRAPHICS_OPTIONS = [
+  'Intel HD Graphics 4000',
+  'NVIDIA GeForce GTX 750 Ti or AMD Radeon R7 260X',
+  'NVIDIA GeForce GTX 960 or AMD Radeon R9 380',
+  'NVIDIA GeForce GTX 1050 Ti or AMD Radeon RX 470',
+  'NVIDIA GeForce GTX 1060 6GB or AMD Radeon RX 580',
+  'NVIDIA GeForce GTX 1660 or AMD Radeon RX 5600 XT',
+  'NVIDIA GeForce RTX 2060 or AMD Radeon RX 6600XT',
+  'NVIDIA GeForce RTX 3060 or AMD Radeon RX 6700 XT',
+  'NVIDIA GeForce RTX 3070 or AMD Radeon RX 6800',
+  'NVIDIA GeForce RTX 4060 or AMD Radeon RX 7600',
+  'NVIDIA GeForce RTX 4070 or AMD Radeon RX 7800 XT'
+];
+
+const RequirementSelect = ({
+  label,
+  value,
+  onChange,
+  options
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+}) => {
+  const normalizedOptions = value && !options.includes(value) ? [value, ...options] : options;
+
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</span>
+      <select
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Non spécifié</option>
+        {normalizedOptions.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+    </label>
+  );
+};
+
+const RegionSelect = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
+  const options = value && !PRODUCT_REGION_OPTIONS.includes(value) ? [value, ...PRODUCT_REGION_OPTIONS] : PRODUCT_REGION_OPTIONS;
+
+  return (
+    <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700" value={value} onChange={(e) => onChange(e.target.value)}>
+      {options.map((option) => (
+        <option key={option} value={option}>{option}</option>
+      ))}
+    </select>
+  );
+};
+
 const IconPicker = ({
   label,
   value,
@@ -189,6 +348,27 @@ const IconPicker = ({
   </div>
 );
 
+const SubCategoryIconPicker = ({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => (
+  <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+    <IconPicker label="Icône Lucide" value={isImageIconValue(value) ? 'Package' : value} onChange={onChange} />
+    <div className="border-t border-slate-100 pt-4">
+      <ImageInput
+        label="Icône image"
+        value={isImageIconValue(value) ? value : ''}
+        onChange={onChange}
+        placeholder="https://..."
+        uploadPreset="icon"
+      />
+    </div>
+  </div>
+);
+
 const ORDER_STATUS_STEPS: { status: OrderStatus; label: string; description: string }[] = [
   { status: OrderStatus.REGISTERED, label: 'Enregistrée', description: 'Commande créée et enregistrée dans Tunidex.' },
   { status: OrderStatus.PENDING_PAYMENT, label: 'Paiement en attente', description: 'Commande créée, en attente de validation du paiement.' },
@@ -224,7 +404,7 @@ const getListingStateClasses = (listing: Listing) => {
 };
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings, categories, onUpdateStatus, onCreateListing, onUpdateListing, onDeleteListing, onRefreshCategories, user, siteConfig, onUpdateSiteConfig }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'listings' | 'create' | 'users' | 'categories' | 'settings' | 'customization' | 'data'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'listings' | 'create' | 'users' | 'categories' | 'settings' | 'customization' | 'store-config' | 'data'>('overview');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<{name: string, sales: number, orders: number}[]>([]);
   const [summary, setSummary] = useState({ totalSales: 0, totalOrders: 0, totalUsers: 0 });
@@ -234,6 +414,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [isDeletingListing, setIsDeletingListing] = useState(false);
   const [orderFilter, setOrderFilter] = useState<'all' | OrderStatus>('all');
   const [adminToast, setAdminToast] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
+  const [adminConfirmation, setAdminConfirmation] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
   const [dataActionStatus, setDataActionStatus] = useState('');
   const [dataActionError, setDataActionError] = useState('');
   const [slideMediaError, setSlideMediaError] = useState('');
@@ -277,6 +463,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [newListingGallery, setNewListingGallery] = useState(''); 
   const [newListingIsInstant, setNewListingIsInstant] = useState(true);
   const [newListingPrepTime, setNewListingPrepTime] = useState('');
+  const [newListingPlatform, setNewListingPlatform] = useState('');
+  const [newListingRegion, setNewListingRegion] = useState('Global');
+  const [newListingActivationCountry, setNewListingActivationCountry] = useState('Tunisia');
+  const [newListingActivationGuideTitle, setNewListingActivationGuideTitle] = useState('Activation Guide');
+  const [newListingActivationGuideContent, setNewListingActivationGuideContent] = useState('');
+  const [newListingRestrictionsTitle, setNewListingRestrictionsTitle] = useState('Check Restrictions');
+  const [newListingRestrictionsContent, setNewListingRestrictionsContent] = useState('');
+  const [newListingRegionTitle, setNewListingRegionTitle] = useState('Region');
+  const [newListingRegionContent, setNewListingRegionContent] = useState('');
+  const [newListingSystemRequirementsEnabled, setNewListingSystemRequirementsEnabled] = useState(false);
+  const [newListingSystemRequirementsPlatform, setNewListingSystemRequirementsPlatform] = useState('Windows');
+  const [newListingMinimumOs, setNewListingMinimumOs] = useState('');
+  const [newListingMinimumMemory, setNewListingMinimumMemory] = useState('');
+  const [newListingMinimumStorage, setNewListingMinimumStorage] = useState('');
+  const [newListingMinimumProcessor, setNewListingMinimumProcessor] = useState('');
+  const [newListingMinimumGraphics, setNewListingMinimumGraphics] = useState('');
+  const [newListingRecommendedOs, setNewListingRecommendedOs] = useState('');
+  const [newListingRecommendedMemory, setNewListingRecommendedMemory] = useState('');
+  const [newListingRecommendedStorage, setNewListingRecommendedStorage] = useState('');
+  const [newListingRecommendedProcessor, setNewListingRecommendedProcessor] = useState('');
+  const [newListingRecommendedGraphics, setNewListingRecommendedGraphics] = useState('');
   const [newListingMetaTitle, setNewListingMetaTitle] = useState('');
   const [newListingMetaDesc, setNewListingMetaDesc] = useState('');
   const [newListingKeywords, setNewListingKeywords] = useState('');
@@ -327,10 +534,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   // --- Site Config State ---
   const [siteLogo, setSiteLogo] = useState(siteConfig.logoUrl);
   const [siteName, setSiteName] = useState(siteConfig.siteName);
+  const [logoSize, setLogoSize] = useState(siteConfig.logoSize || 32);
   const [siteFavicon, setSiteFavicon] = useState(siteConfig.faviconUrl || '');
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(siteConfig.heroSlides || []);
+  const [heroPromoBanners, setHeroPromoBanners] = useState<HeroPromoBanner[]>(siteConfig.heroPromoBanners || []);
+  const [floatingBrandCards, setFloatingBrandCards] = useState<FloatingBrandCard[]>(siteConfig.floatingBrandCards || []);
   const [heroSlideHeight, setHeroSlideHeight] = useState(siteConfig.heroSlideHeight || 440);
-  const [customizationSection, setCustomizationSection] = useState<'slides' | 'colors' | 'layout'>('slides');
+  const [coverBackgroundUrl, setCoverBackgroundUrl] = useState(siteConfig.coverBackgroundUrl || '');
+  const [coverListingIds, setCoverListingIds] = useState<string[]>(siteConfig.coverListingIds || []);
+  const [storeSections, setStoreSections] = useState<StoreSectionConfig[]>(getMergedStoreSections(siteConfig));
+  const [customizationSection, setCustomizationSection] = useState<'hero' | 'floating-cards' | 'store-cover' | 'colors' | 'layout'>('hero');
   const [accentColor, setAccentColor] = useState(siteConfig.accentColor || '#4f46e5');
   const [accentHoverColor, setAccentHoverColor] = useState(siteConfig.accentHoverColor || '#4338ca');
   const [accentSoftColor, setAccentSoftColor] = useState(siteConfig.accentSoftColor || '#e0e7ff');
@@ -379,17 +592,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   };
 
   useEffect(() => {
-    if (!adminToast) return;
-    const timeout = window.setTimeout(() => setAdminToast(null), 4200);
+    if (!adminToast || adminToast.type !== 'success') return;
+    const timeout = window.setTimeout(() => setAdminToast(null), 1500);
     return () => window.clearTimeout(timeout);
   }, [adminToast]);
 
   useEffect(() => {
     setSiteLogo(siteConfig.logoUrl);
     setSiteName(siteConfig.siteName);
+    setLogoSize(siteConfig.logoSize || 32);
     setSiteFavicon(siteConfig.faviconUrl || '');
     setHeroSlides(siteConfig.heroSlides || []);
+    setHeroPromoBanners(siteConfig.heroPromoBanners || []);
+    setFloatingBrandCards(siteConfig.floatingBrandCards || []);
     setHeroSlideHeight(siteConfig.heroSlideHeight || 440);
+    setCoverBackgroundUrl(siteConfig.coverBackgroundUrl || '');
+    setCoverListingIds(siteConfig.coverListingIds || []);
+    setStoreSections(getMergedStoreSections(siteConfig));
     setAccentColor(siteConfig.accentColor || '#4f46e5');
     setAccentHoverColor(siteConfig.accentHoverColor || '#4338ca');
     setAccentSoftColor(siteConfig.accentSoftColor || '#e0e7ff');
@@ -442,6 +661,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     setHeroSlides((prev) => prev.filter((slide) => slide.id !== id));
   };
 
+  const addHeroPromoBanner = () => {
+    setHeroPromoBanners((prev) => {
+      if (prev.length >= 5) return prev;
+      return [
+        ...prev,
+        {
+          id: Math.random().toString(36).slice(2, 10),
+          imageUrl: '',
+          alt: '',
+          linkType: 'listing',
+          linkTarget: ''
+        }
+      ];
+    });
+  };
+
+  const updateHeroPromoBanner = (id: string, patch: Partial<HeroPromoBanner>) => {
+    setHeroPromoBanners((prev) => prev.map((banner) => (banner.id === id ? { ...banner, ...patch } : banner)));
+  };
+
+  const removeHeroPromoBanner = (id: string) => {
+    setHeroPromoBanners((prev) => prev.filter((banner) => banner.id !== id));
+  };
+
+  const addFloatingBrandCard = () => {
+    setFloatingBrandCards((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(36).slice(2, 10),
+        name: '',
+        imageUrl: '',
+        linkType: 'url',
+        linkTarget: ''
+      }
+    ]);
+  };
+
+  const updateFloatingBrandCard = (id: string, patch: Partial<FloatingBrandCard>) => {
+    setFloatingBrandCards((prev) => prev.map((card) => (card.id === id ? { ...card, ...patch } : card)));
+  };
+
+  const removeFloatingBrandCard = (id: string) => {
+    setFloatingBrandCards((prev) => prev.filter((card) => card.id !== id));
+  };
+
+  const updateStoreSection = (sectionId: string, patch: Partial<StoreSectionConfig>) => {
+    setStoreSections((prev) => {
+      const merged = prev.length > 0 ? prev : getMergedStoreSections(siteConfig);
+      return merged.map((section) => (section.id === sectionId ? { ...section, ...patch } : section));
+    });
+  };
+
+  const moveStoreSection = (sectionId: string, direction: 'up' | 'down') => {
+    setStoreSections((prev) => {
+      const ordered = [...(prev.length > 0 ? prev : getMergedStoreSections(siteConfig))].sort((a, b) => (a.order || 0) - (b.order || 0));
+      const index = ordered.findIndex((section) => section.id === sectionId);
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return prev;
+
+      const next = [...ordered];
+      const currentOrder = next[index].order;
+      next[index] = { ...next[index], order: next[targetIndex].order };
+      next[targetIndex] = { ...next[targetIndex], order: currentOrder };
+      return next.sort((a, b) => (a.order || 0) - (b.order || 0));
+    });
+  };
+
   useEffect(() => {
     if (activeTab === 'users' && user.role === UserRole.ADMIN) {
         api.getAllUsers().then(setAllUsers);
@@ -488,10 +774,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
       
       setAllUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, role: editUserRole, balance: parseFloat(editUserBalance) || 0 } : u));
       setEditingUser(null);
-      alert("Utilisateur mis à jour avec succès !");
+      showAdminToast({
+        type: 'success',
+        title: 'Utilisateur mis à jour',
+        message: 'Le rôle et le solde ont été enregistrés avec succès.'
+      });
     } catch (err) {
       console.error(err);
-      alert("Erreur lors de la mise à jour de l'utilisateur");
+      showAdminToast({
+        type: 'error',
+        title: 'Mise à jour impossible',
+        message: "Erreur lors de la mise à jour de l'utilisateur."
+      });
     } finally {
       setIsLoading(false);
     }
@@ -500,24 +794,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   // Categories Handlers
   const handleCreateCategory = async (e: React.FormEvent) => {
       e.preventDefault();
-      if(!newCatName || !newCatSlug) return;
+      if(!newCatName || !newCatSlug) {
+          showAdminToast({
+            type: 'error',
+            title: 'Informations manquantes',
+            message: 'Veuillez renseigner le nom de la catégorie.'
+          });
+          return;
+      }
       try {
           await api.createCategory({ name: newCatName, slug: newCatSlug, icon: newCatIcon, imageUrl: newCatImage, gradient: newCatGradient, order: parseInt(newCatOrder, 10) || 0 });
           setNewCatName(''); setNewCatSlug(''); setNewCatImage(''); setNewCatOrder('0');
           onRefreshCategories();
+          showAdminToast({
+            type: 'success',
+            title: 'Catégorie créée',
+            message: 'La nouvelle catégorie est prête dans le catalogue.'
+          });
       } catch {
-          alert("Erreur");
+          showAdminToast({
+            type: 'error',
+            title: 'Création impossible',
+            message: "La catégorie n'a pas pu être créée. Vérifiez les champs puis réessayez."
+          });
       }
   };
 
+  const toggleCoverListing = (listingId: string) => {
+    setCoverListingIds((current) => {
+      if (current.includes(listingId)) return current.filter((id) => id !== listingId);
+      return [...current, listingId].slice(0, 5);
+    });
+  };
+
   const handleDeleteCategory = async (id: string) => {
-      if(!confirm("Supprimer cette catégorie et tous ses produits ?")) return;
-      try {
-          await api.deleteCategory(id);
-          onRefreshCategories();
-      } catch {
-          alert("Erreur");
-      }
+      setAdminConfirmation({
+        title: 'Supprimer cette catégorie ?',
+        message: 'Cette action supprimera aussi ses sous-catégories et ses produits associés.',
+        confirmLabel: 'Supprimer',
+        onConfirm: async () => {
+          try {
+              await api.deleteCategory(id);
+              onRefreshCategories();
+              showAdminToast({
+                type: 'success',
+                title: 'Catégorie supprimée',
+                message: 'La catégorie a été retirée du catalogue.'
+              });
+          } catch {
+              showAdminToast({
+                type: 'error',
+                title: 'Suppression impossible',
+                message: "La catégorie n'a pas pu être supprimée."
+              });
+          }
+        }
+      });
   };
 
   const handleMoveCategory = async (categoryId: string, direction: 'up' | 'down') => {
@@ -571,17 +903,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         });
         setEditingSubCategory(null);
         onRefreshCategories();
-        alert('Sous-catégorie mise à jour !');
+        showAdminToast({
+          type: 'success',
+          title: 'Sous-catégorie mise à jour',
+          message: 'Les informations de la sous-catégorie ont été enregistrées.'
+        });
     } catch (err) {
         console.error('Update subcat fail:', err);
-        alert('Erreur lors de la mise à jour');
+        showAdminToast({
+          type: 'error',
+          title: 'Mise à jour impossible',
+          message: 'Erreur lors de la mise à jour de la sous-catégorie.'
+        });
     }
   };
 
   const handleCreateSubCategory = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!selectedCatForSub || !newSubCatName) {
-          alert('Veuillez remplir le nom et sélectionner une catégorie parente');
+          showAdminToast({
+            type: 'error',
+            title: 'Informations manquantes',
+            message: 'Veuillez remplir le nom et sélectionner une catégorie parente.'
+          });
           return;
       }
       try {
@@ -595,21 +939,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
           });
           setNewSubCatName(''); setNewSubCatSlug(''); setNewSubCatDesc('');
           onRefreshCategories();
-          alert('Sous-catégorie créée avec succès !');
+          showAdminToast({
+            type: 'success',
+            title: 'Sous-catégorie créée',
+            message: 'La nouvelle sous-catégorie est disponible.'
+          });
       } catch (err) {
           console.error('Create subcat fail:', err);
-          alert('Erreur lors de la création');
+          showAdminToast({
+            type: 'error',
+            title: 'Création impossible',
+            message: 'Erreur lors de la création de la sous-catégorie.'
+          });
+      }
+  };
+
+  const handleMoveSubCategory = async (categoryId: string, subCategoryId: string, direction: 'up' | 'down') => {
+      const parentCategory = categories.find((category) => category.id === categoryId);
+      const ordered = [...(parentCategory?.subCategories || [])].sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+      const currentIndex = ordered.findIndex((subCategory) => subCategory.id === subCategoryId);
+      const nextIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+      if (currentIndex === -1 || nextIndex < 0 || nextIndex >= ordered.length) return;
+
+      const reordered = [...ordered];
+      const [movedSubCategory] = reordered.splice(currentIndex, 1);
+      reordered.splice(nextIndex, 0, movedSubCategory);
+
+      try {
+          await Promise.all(reordered.map((subCategory, index) => api.updateSubCategory(subCategory.id, {
+            name: subCategory.name,
+            slug: subCategory.slug,
+            icon: subCategory.icon || 'Package',
+            description: subCategory.description || '',
+            order: index + 1
+          })));
+          onRefreshCategories();
+          showAdminToast({
+            type: 'success',
+            title: 'Ordre des sous-catégories mis à jour',
+            message: 'La nouvelle position sera appliquée dans la page catégorie.'
+          });
+      } catch {
+          showAdminToast({
+            type: 'error',
+            title: 'Réorganisation impossible',
+            message: "L'ordre des sous-catégories n'a pas pu être sauvegardé."
+          });
       }
   };
 
   const handleDeleteSubCategory = async (id: string) => {
-      if(!confirm("Supprimer cette sous-catégorie ?")) return;
-      try {
-          await api.deleteSubCategory(id);
-          onRefreshCategories();
-      } catch {
-          alert("Erreur");
-      }
+      setAdminConfirmation({
+        title: 'Supprimer cette sous-catégorie ?',
+        message: 'Les produits liés peuvent être affectés par cette suppression.',
+        confirmLabel: 'Supprimer',
+        onConfirm: async () => {
+          try {
+              await api.deleteSubCategory(id);
+              onRefreshCategories();
+              showAdminToast({
+                type: 'success',
+                title: 'Sous-catégorie supprimée',
+                message: 'La sous-catégorie a été retirée.'
+              });
+          } catch {
+              showAdminToast({
+                type: 'error',
+                title: 'Suppression impossible',
+                message: "La sous-catégorie n'a pas pu être supprimée."
+              });
+          }
+        }
+      });
   };
 
   const handleUpdateCategory = async (e: React.FormEvent) => {
@@ -831,6 +1233,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     setNewListingGallery('');
     setNewListingIsInstant(true);
     setNewListingPrepTime('');
+    setNewListingPlatform('');
+    setNewListingRegion('Global');
+    setNewListingActivationCountry('Tunisia');
+    setNewListingActivationGuideTitle('Activation Guide');
+    setNewListingActivationGuideContent('');
+    setNewListingRestrictionsTitle('Check Restrictions');
+    setNewListingRestrictionsContent('');
+    setNewListingRegionTitle('Region');
+    setNewListingRegionContent('');
+    setNewListingSystemRequirementsEnabled(false);
+    setNewListingSystemRequirementsPlatform('Windows');
+    setNewListingMinimumOs('');
+    setNewListingMinimumMemory('');
+    setNewListingMinimumStorage('');
+    setNewListingMinimumProcessor('');
+    setNewListingMinimumGraphics('');
+    setNewListingRecommendedOs('');
+    setNewListingRecommendedMemory('');
+    setNewListingRecommendedStorage('');
+    setNewListingRecommendedProcessor('');
+    setNewListingRecommendedGraphics('');
     setNewListingMetaTitle('');
     setNewListingMetaDesc('');
     setNewListingKeywords('');
@@ -859,6 +1282,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     setNewListingGallery(Array.isArray(listing.gallery) ? listing.gallery.join(', ') : '');
     setNewListingIsInstant(listing.isInstant);
     setNewListingPrepTime(listing.preparationTime || '');
+    setNewListingPlatform(listing.platform || '');
+    setNewListingRegion(listing.region || 'Global');
+    setNewListingActivationCountry(listing.activationCountry || 'Tunisia');
+    setNewListingActivationGuideTitle(listing.activationGuideTitle || 'Activation Guide');
+    setNewListingActivationGuideContent(listing.activationGuideContent || '');
+    setNewListingRestrictionsTitle(listing.restrictionsTitle || 'Check Restrictions');
+    setNewListingRestrictionsContent(listing.restrictionsContent || '');
+    setNewListingRegionTitle(listing.regionTitle || 'Region');
+    setNewListingRegionContent(listing.regionContent || '');
+    setNewListingSystemRequirementsEnabled(Boolean(listing.systemRequirementsEnabled));
+    setNewListingSystemRequirementsPlatform(listing.systemRequirementsPlatform || 'Windows');
+    setNewListingMinimumOs(listing.minimumOs || '');
+    setNewListingMinimumMemory(listing.minimumMemory || '');
+    setNewListingMinimumStorage(listing.minimumStorage || '');
+    setNewListingMinimumProcessor(listing.minimumProcessor || '');
+    setNewListingMinimumGraphics(listing.minimumGraphics || '');
+    setNewListingRecommendedOs(listing.recommendedOs || '');
+    setNewListingRecommendedMemory(listing.recommendedMemory || '');
+    setNewListingRecommendedStorage(listing.recommendedStorage || '');
+    setNewListingRecommendedProcessor(listing.recommendedProcessor || '');
+    setNewListingRecommendedGraphics(listing.recommendedGraphics || '');
     setNewListingMetaTitle(listing.metaTitle || '');
     setNewListingMetaDesc(listing.metaDesc || '');
     setNewListingKeywords(listing.keywords || '');
@@ -906,11 +1350,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     e.preventDefault();
     const cleanDescription = sanitizeRichText(generatedDescription);
     if (!richTextToPlainText(cleanDescription)) {
-      alert('Ajoutez une description produit.');
+      showAdminToast({
+        type: 'error',
+        title: 'Description requise',
+        message: 'Ajoutez une description produit avant de continuer.'
+      });
       return;
     }
     if (newListingIsPackage && newListingPackageItems.length === 0) {
-      alert('Ajoutez au moins un produit au package.');
+      showAdminToast({
+        type: 'error',
+        title: 'Package incomplet',
+        message: 'Ajoutez au moins un produit au package.'
+      });
       return;
     }
     const cleanVariants = newListingVariants
@@ -948,6 +1400,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         deliveryTimeHours: 24,
         isInstant: newListingIsInstant,
         preparationTime: newListingIsInstant ? 'Immédiat' : newListingPrepTime,
+        platform: newListingPlatform,
+        region: newListingRegion,
+        activationCountry: newListingActivationCountry,
+        activationGuideTitle: newListingActivationGuideTitle,
+        activationGuideContent: sanitizeRichText(newListingActivationGuideContent),
+        restrictionsTitle: newListingRestrictionsTitle,
+        restrictionsContent: sanitizeRichText(newListingRestrictionsContent),
+        regionTitle: newListingRegionTitle,
+        regionContent: sanitizeRichText(newListingRegionContent),
+        systemRequirementsEnabled: newListingSystemRequirementsEnabled,
+        systemRequirementsPlatform: newListingSystemRequirementsPlatform,
+        minimumOs: newListingMinimumOs,
+        minimumMemory: newListingMinimumMemory,
+        minimumStorage: newListingMinimumStorage,
+        minimumProcessor: newListingMinimumProcessor,
+        minimumGraphics: newListingMinimumGraphics,
+        recommendedOs: newListingRecommendedOs,
+        recommendedMemory: newListingRecommendedMemory,
+        recommendedStorage: newListingRecommendedStorage,
+        recommendedProcessor: newListingRecommendedProcessor,
+        recommendedGraphics: newListingRecommendedGraphics,
         metaTitle: newListingMetaTitle,
         metaDesc: newListingMetaDesc,
         keywords: newListingKeywords,
@@ -1008,29 +1481,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   return (
     <>
     {adminToast && (
-      <div className="fixed top-24 right-6 z-[80] animate-in slide-in-from-right-6 fade-in duration-300">
-        <div className={`w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border bg-white shadow-2xl ${
-          adminToast.type === 'success' ? 'border-emerald-100 shadow-emerald-100/70' : 'border-red-100 shadow-red-100/70'
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className={`w-full max-w-md overflow-hidden rounded-3xl border bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-3 duration-300 ${
+          adminToast.type === 'success' ? 'border-emerald-100' : 'border-red-100'
         }`}>
           <div className={`h-1.5 ${adminToast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-          <div className="flex items-start gap-4 p-4">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
-              adminToast.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
-            }`}>
-              {adminToast.type === 'success' ? <LucideIcons.CheckCircle2 size={22} /> : <LucideIcons.AlertCircle size={22} />}
+          <div className="p-6">
+            <div className="flex items-start gap-4">
+              <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+                adminToast.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+              }`}>
+                {adminToast.type === 'success' ? <LucideIcons.CheckCircle2 size={28} className="animate-[notification-check_450ms_ease-out]" /> : <LucideIcons.AlertCircle size={28} />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-black text-slate-900">{adminToast.title}</div>
+                <div className="mt-1 text-sm leading-6 text-slate-600">{adminToast.message}</div>
+              </div>
+              {adminToast.type === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => setAdminToast(null)}
+                  className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Fermer la notification"
+                >
+                  <LucideIcons.X size={18} />
+                </button>
+              )}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-black text-slate-900">{adminToast.title}</div>
-              <div className="mt-1 text-sm leading-5 text-slate-500">{adminToast.message}</div>
+          </div>
+        </div>
+      </div>
+    )}
+    {adminConfirmation && (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="w-full max-w-md overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-3 duration-300">
+          <div className="h-1.5 bg-amber-500" />
+          <div className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                <LucideIcons.AlertTriangle size={28} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-black text-slate-900">{adminConfirmation.title}</div>
+                <div className="mt-1 text-sm leading-6 text-slate-600">{adminConfirmation.message}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminConfirmation(null)}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Fermer la confirmation"
+              >
+                <LucideIcons.X size={18} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setAdminToast(null)}
-              className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Fermer la notification"
-            >
-              <LucideIcons.X size={16} />
-            </button>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setAdminConfirmation(null)}
+                className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const action = adminConfirmation.onConfirm;
+                  setAdminConfirmation(null);
+                  await action();
+                }}
+                className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white hover:bg-red-700"
+              >
+                {adminConfirmation.confirmLabel}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1045,10 +1568,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         <nav className="space-y-1">
           <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'overview' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><TrendingUp size={18} /> <span>Analytique</span></button>
           <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'orders' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Package size={18} /> <span>Commandes</span></button>
-          <button onClick={() => setActiveTab('listings')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'listings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><DollarSign size={18} /> <span>Produits</span></button>
-          {user.role === UserRole.ADMIN && (
+              <button onClick={() => setActiveTab('listings')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'listings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><DollarSign size={18} /> <span>Produits</span></button>
+            {user.role === UserRole.ADMIN && (
             <>
               <button onClick={() => setActiveTab('customization')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'customization' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Images size={18} /> <span>Customisation</span></button>
+              <button onClick={() => setActiveTab('store-config')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'store-config' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Store size={18} /> <span>Store config</span></button>
               <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'settings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Settings size={18} /> <span>Paramètres</span></button>
               <button onClick={() => setActiveTab('data')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'data' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Database size={18} /> <span>Données</span></button>
             </>
@@ -1169,6 +1693,114 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
           </div>
         )}
 
+        {activeTab === 'store-config' && user.role === UserRole.ADMIN && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+                      <LucideIcons.Store size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">Store config</h2>
+                      <p className="mt-1 text-sm text-slate-500">Active ou désactive les sections visibles dans la home du store.</p>
+                    </div>
+                  </div>
+                  <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-sm leading-6 text-indigo-900">
+                    Cette page devient le centre de contrôle du visuel store. Chaque section possède un ID stable, un ordre et un état de visibilité, donc les prochaines sections comme Top Products ou Gift Cards peuvent être pilotées ici.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const normalizedSections = getMergedStoreSections({ storeSections }).map((section) => ({
+                      id: section.id,
+                      enabled: section.enabled,
+                      order: section.order
+                    }));
+                    setStoreSections(normalizedSections);
+                    onUpdateSiteConfig({ storeSections: normalizedSections });
+                    showAdminToast({
+                      type: 'success',
+                      title: 'Store config sauvegardée',
+                      message: 'La visibilité des sections du store a été mise à jour.'
+                    });
+                  }}
+                  className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700"
+                >
+                  <LucideIcons.Save size={18} className="mr-2" />
+                  Sauvegarder
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {[...storeSections].sort((a, b) => (a.order || 0) - (b.order || 0)).map((section, index, orderedSections) => {
+                const definition = STORE_SECTION_DEFINITIONS.find((item) => item.id === section.id);
+                const label = definition?.label || section.id;
+                const description = definition?.description || 'Section personnalisée du store.';
+                const icon = definition?.icon || 'PanelTop';
+                const isEnabled = section.enabled;
+
+                return (
+                  <div key={section.id} className={`rounded-2xl border bg-white p-5 shadow-sm transition-all ${isEnabled ? 'border-slate-200' : 'border-slate-200 opacity-70'}`}>
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${isEnabled ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          <DynamicIcon name={icon} className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-black text-slate-900">{label}</h3>
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{section.id}</span>
+                            {definition?.phase === 'ready' && (
+                              <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-amber-700">prêt extension</span>
+                            )}
+                          </div>
+                          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 md:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => moveStoreSection(section.id, 'up')}
+                          disabled={index === 0}
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-indigo-200 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Monter la section"
+                        >
+                          <LucideIcons.ChevronUp size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveStoreSection(section.id, 'down')}
+                          disabled={index === orderedSections.length - 1}
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-indigo-200 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-30"
+                          title="Descendre la section"
+                        >
+                          <LucideIcons.ChevronDown size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateStoreSection(section.id, { enabled: !isEnabled })}
+                          className={`relative h-8 w-14 rounded-full transition ${isEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                          aria-label={isEnabled ? `Désactiver ${label}` : `Activer ${label}`}
+                        >
+                          <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition ${isEnabled ? 'left-7' : 'left-1'}`} />
+                        </button>
+                        <span className={`w-16 text-xs font-black uppercase tracking-wider ${isEnabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          {isEnabled ? 'Visible' : 'Off'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
          {activeTab === 'settings' && user.role === UserRole.ADMIN && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Section 1: Logo & Icone du Site */}
@@ -1206,6 +1838,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                     placeholder="URL du logo ou upload"
                                     uploadPreset="siteLogo"
                                 />
+                                <div>
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center">
+                                            <LucideIcons.Maximize2 size={14} className="mr-1.5 text-slate-400" /> Taille du logo
+                                        </label>
+                                        <span className="text-xs font-black text-slate-700">{logoSize}px</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="24"
+                                        max="80"
+                                        step="1"
+                                        value={logoSize}
+                                        onChange={(e) => setLogoSize(Number(e.target.value))}
+                                        className="w-full accent-indigo-600"
+                                    />
+                                    <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        <span>Petit</span>
+                                        <span>Grand</span>
+                                    </div>
+                                </div>
                                 <ImageInput 
                                     label="Favicon (Icône de l'onglet)"
                                     value={siteFavicon}
@@ -1243,13 +1896,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                             <div className="bg-white p-5 rounded-xl shadow-xl border border-slate-100 flex items-center justify-between w-full max-w-sm group-hover:scale-105 transition-transform duration-500">
                                 <div className="flex items-center space-x-4">
                                     {siteLogo ? (
-                                        <img src={siteLogo} alt="Logo Preview" className="h-10 w-auto object-contain" referrerPolicy="no-referrer" />
+                                        <img src={siteLogo} alt="Logo Preview" className="w-auto object-contain" style={{ height: `${logoSize}px` }} referrerPolicy="no-referrer" />
                                     ) : (
-                                        <div className="bg-indigo-600 text-white p-2 rounded-lg font-black text-2xl w-12 h-12 flex items-center justify-center shadow-lg shadow-indigo-200">
+                                        <div className="bg-indigo-600 text-white rounded-lg font-black text-2xl flex items-center justify-center shadow-lg shadow-indigo-200" style={{ height: `${logoSize}px`, width: `${logoSize}px` }}>
                                             {siteName.charAt(0)}
                                         </div>
                                     )}
-                                    <span className="font-black text-2xl tracking-tighter text-slate-900">{siteName}</span>
                                 </div>
                                 <div className="flex space-x-2">
                                     <div className="w-8 h-2 bg-slate-100 rounded-full"></div>
@@ -1452,6 +2104,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                         onClick={() => onUpdateSiteConfig({ 
                             siteName, 
                             logoUrl: siteLogo, 
+                            logoSize,
                             faviconUrl: siteFavicon,
                             smtpMailerName,
                             smtpHost,
@@ -1477,10 +2130,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex flex-wrap gap-3">
                     <button
-                        onClick={() => setCustomizationSection('slides')}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customizationSection === 'slides' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'}`}
+                        onClick={() => setCustomizationSection('hero')}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customizationSection === 'hero' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'}`}
                     >
-                        Slide
+                        Hero carousel
+                    </button>
+                    <button
+                        onClick={() => setCustomizationSection('store-cover')}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customizationSection === 'store-cover' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'}`}
+                    >
+                        Store cover
+                    </button>
+                    <button
+                        onClick={() => setCustomizationSection('floating-cards')}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customizationSection === 'floating-cards' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'}`}
+                    >
+                        card flottant
                     </button>
                     <button
                         onClick={() => setCustomizationSection('colors')}
@@ -1496,7 +2161,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                     </button>
                 </div>
 
-                {customizationSection === 'slides' && (
+                {customizationSection === 'hero' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                         <div className="flex items-center space-x-2">
@@ -1504,8 +2169,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                 <LucideIcons.Images className="text-indigo-600" size={20} />
                             </div>
                             <div>
-                                <h2 className="text-lg font-bold text-slate-900 leading-tight">Slider Page d'Accueil</h2>
-                                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Même bannière, slides configurables</p>
+                                <h2 className="text-lg font-bold text-slate-900 leading-tight">Hero carousel</h2>
+                                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Slides du carousel + 5 cartes promo configurables</p>
                             </div>
                         </div>
                         <button onClick={addHeroSlide} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700">
@@ -1529,21 +2194,99 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                 {slideMediaError}
                             </div>
                         )}
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                            <div>
-                                <div className="text-xs uppercase tracking-widest text-slate-400 font-bold">Redimensionnement global</div>
-                                <div className="text-sm text-slate-600 mt-1">Le bouton `-` réduit la hauteur de tous les slides. Le bouton `+` l’augmente.</div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <button type="button" onClick={() => setHeroSlideHeight((prev) => Math.max(320, prev - 20))} className="h-11 w-11 rounded-xl border border-slate-200 bg-white text-slate-700 hover:border-slate-300 text-xl font-black">
-                                    -
-                                </button>
-                                <div className="min-w-[92px] text-center rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-900">
-                                    {heroSlideHeight}px
+                        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <div className="text-xs uppercase tracking-widest text-slate-400 font-bold">Cartes promo autour du carousel</div>
+                                    <div className="mt-1 text-sm text-slate-600">5 emplacements fixes: grande carte droite, deux petites cartes droites, puis deux cartes sous le carousel. L'admin modifie seulement les images et les liens.</div>
                                 </div>
-                                <button type="button" onClick={() => setHeroSlideHeight((prev) => Math.min(620, prev + 20))} className="h-11 w-11 rounded-xl border border-slate-200 bg-white text-slate-700 hover:border-slate-300 text-xl font-black">
-                                    +
+                                <button type="button" onClick={addHeroPromoBanner} disabled={heroPromoBanners.length >= 5} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+                                    Ajouter une carte
                                 </button>
+                            </div>
+
+                            {heroPromoBanners.length === 0 && (
+                                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                                    Aucune carte promo. Ajoute des cartes pour reproduire le layout marketplace à droite du carousel.
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                {heroPromoBanners.map((banner, index) => (
+                                    <div key={banner.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                                        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+                                            <div>
+                                                <div className="text-xs font-black uppercase tracking-widest text-slate-400">Carte {index + 1}</div>
+                                                <div className="text-sm font-bold text-slate-900">{banner.alt || 'Carte promo'}</div>
+                                            </div>
+                                            <button type="button" onClick={() => removeHeroPromoBanner(banner.id)} className="text-slate-400 hover:text-red-600">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-[1fr_1.1fr]">
+                                            <div className="space-y-4">
+                                                <ImageInput
+                                                    label="Image carte"
+                                                    value={banner.imageUrl}
+                                                    onChange={(value) => updateHeroPromoBanner(banner.id, { imageUrl: value })}
+                                                    placeholder="URL image ou upload"
+                                                    uploadPreset="default"
+                                                />
+                                                <div>
+                                                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Nom / Alt</label>
+                                                    <input
+                                                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+                                                        value={banner.alt || ''}
+                                                        onChange={(e) => updateHeroPromoBanner(banner.id, { alt: e.target.value })}
+                                                        placeholder="Ex: Forza Horizon 6"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <div className="relative min-h-36 overflow-hidden rounded-2xl bg-slate-900">
+                                                    {banner.imageUrl ? (
+                                                        <img src={banner.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                                                    ) : (
+                                                        <div className="absolute inset-0 flex items-center justify-center text-xs font-bold uppercase tracking-widest text-slate-500">Aperçu carte</div>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                    <div>
+                                                        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Type de lien</label>
+                                                        <select
+                                                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+                                                            value={banner.linkType || 'listing'}
+                                                            onChange={(e) => updateHeroPromoBanner(banner.id, { linkType: e.target.value as HeroPromoBanner['linkType'], linkTarget: '' })}
+                                                        >
+                                                            <option value="listing">Offre produit</option>
+                                                            <option value="category">Catégorie</option>
+                                                            <option value="url">URL externe</option>
+                                                            <option value="collections">Scroll catalogue</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Cible</label>
+                                                        {banner.linkType === 'listing' ? (
+                                                            <select className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3" value={banner.linkTarget || ''} onChange={(e) => updateHeroPromoBanner(banner.id, { linkTarget: e.target.value })}>
+                                                                <option value="">Sélectionner une offre</option>
+                                                                {listings.map((listing) => <option key={listing.id} value={listing.id}>{listing.title}</option>)}
+                                                            </select>
+                                                        ) : banner.linkType === 'category' ? (
+                                                            <select className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3" value={banner.linkTarget || ''} onChange={(e) => updateHeroPromoBanner(banner.id, { linkTarget: e.target.value })}>
+                                                                <option value="">Sélectionner une catégorie</option>
+                                                                {categories.map((category) => <option key={category.id} value={category.slug}>{category.name}</option>)}
+                                                            </select>
+                                                        ) : banner.linkType === 'url' ? (
+                                                            <input className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3" value={banner.linkTarget || ''} onChange={(e) => updateHeroPromoBanner(banner.id, { linkTarget: e.target.value })} placeholder="https://..." />
+                                                        ) : (
+                                                            <div className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-500">Scroll catalogue</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                         {heroSlides.length === 0 && (
@@ -1660,26 +2403,214 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                     </div>
                                     <div className="rounded-3xl overflow-hidden bg-slate-900 shadow-xl relative" style={{ height: `${Math.max(300, heroSlideHeight - 80)}px` }}>
                                         {isVideoSlideMedia(slide.imageUrl, slide.mediaType) ? (
-                                            <video src={slide.imageUrl} className="absolute inset-0 h-full w-full object-cover opacity-45" muted loop playsInline autoPlay />
+                                            <video src={slide.imageUrl} className="absolute inset-0 h-full w-full object-cover" muted loop playsInline autoPlay />
                                         ) : (
-                                            <img src={slide.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'} className="absolute inset-0 h-full w-full object-cover opacity-40" alt="" />
+                                            <img src={slide.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'} className="absolute inset-0 h-full w-full object-cover" alt="" />
                                         )}
-                                        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent"></div>
-                                        <div className="relative px-8 py-12 max-w-3xl text-white">
-                                            <div className="inline-flex items-center space-x-2 bg-indigo-600/20 text-indigo-400 border border-indigo-600/30 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 backdrop-blur-sm">
-                                                <Zap size={14} fill="currentColor" />
-                                                <span>{slide.badge || 'Dernière offre'}</span>
-                                            </div>
-                                            <h3 className="text-3xl font-black leading-tight mb-4">{slide.title || 'Titre du slide'}</h3>
-                                            <p className="text-sm text-slate-300 mb-8 max-w-xl leading-relaxed">{slide.subtitle || "Le texte du slide apparaîtra ici, avec la même zone visuelle que la bannière d'accueil."}</p>
-                                            <button type="button" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold">
-                                                {slide.ctaLabel || 'Voir l’offre'}
-                                            </button>
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/5"></div>
+                                        <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 rounded-full bg-black/60 px-2 py-1.5">
+                                            {heroSlides.slice(0, 5).map((dotSlide) => (
+                                                <span key={dotSlide.id} className={`mx-1 h-2.5 w-2.5 rounded-full bg-white ${dotSlide.id === slide.id ? 'opacity-90' : 'opacity-30'}`} />
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+                )}
+
+                {customizationSection === 'floating-cards' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div className="flex items-center space-x-2">
+                            <div className="p-2 bg-indigo-100 rounded-lg">
+                                <LucideIcons.Badge className="text-indigo-600" size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 leading-tight">card flottant</h2>
+                                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Marques partenaires affichées sous le hero slider</p>
+                            </div>
+                        </div>
+                        <button type="button" onClick={addFloatingBrandCard} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700">
+                            Ajouter une carte
+                        </button>
+                    </div>
+                    <div className="p-6 space-y-6">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 backdrop-blur-xl">
+                            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                                <div>
+                                    <div className="text-xs font-black uppercase tracking-widest text-slate-400">Aperçu</div>
+                                    <div className="mt-1 text-sm text-slate-500">Le fond est automatique selon le thème. Les cartes restent uniquement des images.</div>
+                                </div>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200/60 bg-white/55 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55">
+                                <div className="flex gap-3 overflow-hidden">
+                                    {floatingBrandCards.filter((card) => card.imageUrl).map((card) => (
+                                        <div key={card.id} className="h-[82px] w-[150px] shrink-0 overflow-hidden rounded-[10px]">
+                                            <img src={card.imageUrl} alt="" className="h-full w-full object-cover" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {floatingBrandCards.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                                Aucune carte flottante. Ajoute une marque partenaire pour afficher la section sous le hero slider.
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                            {floatingBrandCards.map((card, index) => (
+                                <div key={card.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                                    <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+                                        <div>
+                                            <div className="text-xs font-black uppercase tracking-widest text-slate-400">Carte flottante {index + 1}</div>
+                                            <div className="text-sm font-bold text-slate-900">{card.name || 'Marque partenaire'}</div>
+                                        </div>
+                                        <button type="button" onClick={() => removeFloatingBrandCard(card.id)} className="text-slate-400 hover:text-red-600">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-[1fr_1.1fr]">
+                                        <div className="space-y-4">
+                                            <ImageInput
+                                                label="Logo / image marque"
+                                                value={card.imageUrl}
+                                                onChange={(value) => updateFloatingBrandCard(card.id, { imageUrl: value })}
+                                                placeholder="URL logo ou upload"
+                                                uploadPreset="default"
+                                            />
+                                            <div>
+                                                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Nom</label>
+                                                <input
+                                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+                                                    value={card.name}
+                                                    onChange={(e) => updateFloatingBrandCard(card.id, { name: e.target.value })}
+                                                    placeholder="Ex: Steam"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="h-[118px] overflow-hidden rounded-2xl bg-slate-200">
+                                                {card.imageUrl ? (
+                                                    <img src={card.imageUrl} alt="" className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <div className="flex h-full items-center justify-center text-xs font-bold uppercase tracking-widest text-slate-400">Aperçu</div>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                <div>
+                                                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Type de lien</label>
+                                                    <select
+                                                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+                                                        value={card.linkType || 'url'}
+                                                        onChange={(e) => updateFloatingBrandCard(card.id, { linkType: e.target.value as FloatingBrandCard['linkType'], linkTarget: '' })}
+                                                    >
+                                                        <option value="listing">Offre produit</option>
+                                                        <option value="category">Catégorie</option>
+                                                        <option value="url">URL externe</option>
+                                                        <option value="collections">Scroll catalogue</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Cible</label>
+                                                    {card.linkType === 'listing' ? (
+                                                        <select className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3" value={card.linkTarget || ''} onChange={(e) => updateFloatingBrandCard(card.id, { linkTarget: e.target.value })}>
+                                                            <option value="">Sélectionner une offre</option>
+                                                            {listings.map((listing) => <option key={listing.id} value={listing.id}>{listing.title}</option>)}
+                                                        </select>
+                                                    ) : card.linkType === 'category' ? (
+                                                        <select className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3" value={card.linkTarget || ''} onChange={(e) => updateFloatingBrandCard(card.id, { linkTarget: e.target.value })}>
+                                                            <option value="">Sélectionner une catégorie</option>
+                                                            {categories.map((category) => <option key={category.id} value={category.slug}>{category.name}</option>)}
+                                                        </select>
+                                                    ) : card.linkType === 'url' ? (
+                                                        <input className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3" value={card.linkTarget || ''} onChange={(e) => updateFloatingBrandCard(card.id, { linkTarget: e.target.value })} placeholder="https://..." />
+                                                    ) : (
+                                                        <div className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-500">Scroll catalogue</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                )}
+
+                {customizationSection === 'store-cover' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div className="flex items-center space-x-2">
+                            <div className="p-2 bg-indigo-100 rounded-lg">
+                                <LucideIcons.PanelTop className="text-indigo-600" size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 leading-tight">Store cover</h2>
+                                <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Background et produits de la cover sous le menu</p>
+                            </div>
+                        </div>
+                        <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 border border-slate-200">
+                            {coverListingIds.length}/5 sélectionnés
+                        </div>
+                    </div>
+                    <div className="p-6 space-y-6">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                            <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.2fr]">
+                                <ImageInput
+                                    label="Background de la cover"
+                                    value={coverBackgroundUrl}
+                                    onChange={setCoverBackgroundUrl}
+                                    placeholder="URL image ou upload"
+                                />
+                                <div className="relative min-h-44 overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
+                                    <img
+                                        src={coverBackgroundUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'}
+                                        alt=""
+                                        className="absolute inset-0 h-full w-full object-cover opacity-45"
+                                    />
+                                    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(88,52,146,0.72),rgba(244,89,94,0.68),rgba(246,160,64,0.72))]" />
+                                    <div className="relative flex h-full min-h-44 items-center justify-center px-6 text-center text-white">
+                                        <div>
+                                            <div className="text-xs font-black uppercase tracking-widest text-white/70">Aperçu cover</div>
+                                            <div className="mt-2 text-2xl font-black">Produits sélectionnés</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Produits affichés dans la cover</div>
+                            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                                {listings.filter((listing) => !listing.isArchived).map((listing) => {
+                                    const isSelected = coverListingIds.includes(listing.id);
+                                    return (
+                                        <button
+                                            key={listing.id}
+                                            type="button"
+                                            onClick={() => toggleCoverListing(listing.id)}
+                                            className={`min-w-[220px] rounded-2xl border bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                                                isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/10' : 'border-slate-200'
+                                            }`}
+                                        >
+                                            <div className="flex gap-3">
+                                                <img src={listing.imageUrl} alt="" className="h-14 w-14 rounded-xl object-cover bg-slate-100" />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="line-clamp-2 text-xs font-black text-slate-900">{listing.title}</div>
+                                                    <div className="mt-1 truncate text-[10px] font-bold text-slate-400">{listing.game || 'Produit'}</div>
+                                                    <div className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-black ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                        {isSelected ? 'Affiché' : 'Ajouter'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </div>
                 )}
@@ -1904,7 +2835,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
 
                 <div className="flex justify-end pt-6 sticky bottom-0 bg-slate-50/80 backdrop-blur-md p-4 -mx-4 rounded-t-3xl border-t border-slate-200 z-10">
                     <button
-                        onClick={() => onUpdateSiteConfig({ heroSlides, heroSlideHeight, accentColor, accentHoverColor, accentSoftColor, accentTextColor, headerAnnouncement, headerSearchPlaceholder, headerCtaLabel, footerTagline, footerDescription, footerEmail, footerPhone, footerWhatsapp, footerAddress, footerCopyright })}
+                        onClick={() => onUpdateSiteConfig({ heroSlides, heroPromoBanners, floatingBrandCards, heroSlideHeight, coverBackgroundUrl, coverListingIds, accentColor, accentHoverColor, accentSoftColor, accentTextColor, headerAnnouncement, headerSearchPlaceholder, headerCtaLabel, footerTagline, footerDescription, footerEmail, footerPhone, footerWhatsapp, footerAddress, footerCopyright })}
                         className="bg-indigo-600 text-white font-black py-4 px-16 rounded-2xl hover:bg-indigo-700 transition shadow-2xl shadow-indigo-300 flex items-center justify-center transform hover:-translate-y-1 active:scale-95 group"
                     >
                         <LucideIcons.Save size={20} className="mr-3 group-hover:rotate-12 transition-transform" />
@@ -2099,7 +3030,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                     <input className="w-full border border-slate-200 p-3 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={editSubSlug} onChange={e => setEditSubSlug(e.target.value)} />
                                 </div>
                                 <div>
-                                    <IconPicker label="Icône Lucide" value={editSubIcon} onChange={setEditSubIcon} />
+                                    <SubCategoryIconPicker value={editSubIcon} onChange={setEditSubIcon} />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Description</label>
@@ -2234,7 +3165,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                             <input className="w-full border p-2 rounded" placeholder="Slug (ex: chatbots)" value={newSubCatSlug} onChange={e => setNewSubCatSlug(e.target.value)} required />
                             
                             <div className="grid grid-cols-1 gap-3">
-                                <IconPicker label="Icône Lucide" value={newSubCatIcon} onChange={setNewSubCatIcon} />
+                                <SubCategoryIconPicker value={newSubCatIcon} onChange={setNewSubCatIcon} />
                             </div>
                             <div className="grid grid-cols-1 gap-2">
                                 <input type="number" className="w-full border p-2 rounded" placeholder="Ordre" value={newSubCatOrder} onChange={e => setNewSubCatOrder(e.target.value)} />
@@ -2296,16 +3227,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                         </div>
                                     </div>
                                     <div className="px-6 py-3 grid grid-cols-2 md:grid-cols-3 gap-3">
-                                        {cat.subCategories?.map(sub => (
-                                            <div key={sub.id} className="bg-white border border-slate-100 p-3 rounded-lg flex justify-between items-start group hover:border-indigo-200 transition-colors">
+                                        {[...(cat.subCategories || [])]
+                                          .sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name))
+                                          .map((sub, subIndex, orderedSubCategories) => (
+                                            <div key={sub.id} className="bg-white border border-slate-100 p-3 rounded-lg flex justify-between items-start gap-3 group hover:border-indigo-200 transition-colors">
                                                 <div className="flex items-start space-x-3">
                                                     <div className="p-1.5 bg-slate-50 rounded text-slate-500"><DynamicIcon name={sub.icon || 'Package'} className="w-4 h-4" /></div>
                                                     <div>
-                                                        <div className="font-bold text-xs text-slate-900">{sub.name}</div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="font-bold text-xs text-slate-900">{sub.name}</div>
+                                                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-black text-slate-500">
+                                                                {sub.order || subIndex + 1}
+                                                            </span>
+                                                        </div>
                                                         <div className="text-[10px] text-slate-400 line-clamp-1">{sub.description}</div>
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col space-y-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleMoveSubCategory(cat.id, sub.id, 'up')}
+                                                      disabled={subIndex === 0}
+                                                      className="text-slate-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-30"
+                                                      title="Monter"
+                                                    >
+                                                      <LucideIcons.ChevronUp size={12} />
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleMoveSubCategory(cat.id, sub.id, 'down')}
+                                                      disabled={subIndex === orderedSubCategories.length - 1}
+                                                      className="text-slate-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-30"
+                                                      title="Descendre"
+                                                    >
+                                                      <LucideIcons.ChevronDown size={12} />
+                                                    </button>
                                                     <button onClick={() => startEditingSubCategory(sub)} className="text-slate-400 hover:text-indigo-600"><Edit size={12} /></button>
                                                     <button onClick={() => handleDeleteSubCategory(sub.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={12} /></button>
                                                 </div>
@@ -2600,6 +3556,93 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                 onChange={setGeneratedDescription}
                 required
               />
+
+              {!newListingIsPackage && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-black text-slate-800">Informations page produit</h3>
+                    <p className="mt-1 text-xs text-slate-500">Ces champs alimentent la page produit et les popups cliquables.</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Platform</label>
+                      <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" value={newListingPlatform} onChange={(e) => setNewListingPlatform(e.target.value)} placeholder="Roblox / Steam / Xbox" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Region</label>
+                      <RegionSelect value={newListingRegion} onChange={setNewListingRegion} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Activation country</label>
+                      <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" value={newListingActivationCountry} onChange={(e) => setNewListingActivationCountry(e.target.value)} placeholder="Tunisia" />
+                    </div>
+                  </div>
+                  <div className="mt-5 grid grid-cols-1 gap-5">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <input className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold" value={newListingRestrictionsTitle} onChange={(e) => setNewListingRestrictionsTitle(e.target.value)} placeholder="Check Restrictions" />
+                      <RichTextEditor label="Restrictions popup content" value={newListingRestrictionsContent} onChange={setNewListingRestrictionsContent} />
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <input className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold" value={newListingActivationGuideTitle} onChange={(e) => setNewListingActivationGuideTitle(e.target.value)} placeholder="Activation Guide" />
+                      <RichTextEditor label="Activation guide popup content" value={newListingActivationGuideContent} onChange={setNewListingActivationGuideContent} />
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <input className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold" value={newListingRegionTitle} onChange={(e) => setNewListingRegionTitle(e.target.value)} placeholder="Region" />
+                      <RichTextEditor label="Region popup content" value={newListingRegionContent} onChange={setNewListingRegionContent} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!newListingIsPackage && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800">System requirements</h3>
+                      <p className="mt-1 text-xs text-slate-500">Active cette section pour les jeux PC et ajoute les informations minimum/recommandées.</p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">
+                      <input type="checkbox" checked={newListingSystemRequirementsEnabled} onChange={(e) => setNewListingSystemRequirementsEnabled(e.target.checked)} />
+                      Afficher la section
+                    </label>
+                  </div>
+
+                  {newListingSystemRequirementsEnabled && (
+                    <div className="space-y-5">
+                      <div>
+                        <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">System</label>
+                        <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 md:w-64" value={newListingSystemRequirementsPlatform} onChange={(e) => setNewListingSystemRequirementsPlatform(e.target.value)}>
+                          {SYSTEM_PLATFORM_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <h4 className="mb-4 text-sm font-black text-slate-800">Minimum System Requirements</h4>
+                          <div className="grid grid-cols-1 gap-3">
+                            <RequirementSelect label="OS" value={newListingMinimumOs} onChange={setNewListingMinimumOs} options={SYSTEM_OS_OPTIONS} />
+                            <RequirementSelect label="Memory" value={newListingMinimumMemory} onChange={setNewListingMinimumMemory} options={SYSTEM_MEMORY_OPTIONS} />
+                            <RequirementSelect label="Storage" value={newListingMinimumStorage} onChange={setNewListingMinimumStorage} options={SYSTEM_STORAGE_OPTIONS} />
+                            <RequirementSelect label="Processor" value={newListingMinimumProcessor} onChange={setNewListingMinimumProcessor} options={SYSTEM_PROCESSOR_OPTIONS} />
+                            <RequirementSelect label="Graphics" value={newListingMinimumGraphics} onChange={setNewListingMinimumGraphics} options={SYSTEM_GRAPHICS_OPTIONS} />
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <h4 className="mb-4 text-sm font-black text-slate-800">Recommended System Requirements</h4>
+                          <div className="grid grid-cols-1 gap-3">
+                            <RequirementSelect label="OS" value={newListingRecommendedOs} onChange={setNewListingRecommendedOs} options={SYSTEM_OS_OPTIONS} />
+                            <RequirementSelect label="Memory" value={newListingRecommendedMemory} onChange={setNewListingRecommendedMemory} options={SYSTEM_MEMORY_OPTIONS} />
+                            <RequirementSelect label="Storage" value={newListingRecommendedStorage} onChange={setNewListingRecommendedStorage} options={SYSTEM_STORAGE_OPTIONS} />
+                            <RequirementSelect label="Processor" value={newListingRecommendedProcessor} onChange={setNewListingRecommendedProcessor} options={SYSTEM_PROCESSOR_OPTIONS} />
+                            <RequirementSelect label="Graphics" value={newListingRecommendedGraphics} onChange={setNewListingRecommendedGraphics} options={SYSTEM_GRAPHICS_OPTIONS} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {!newListingIsPackage && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

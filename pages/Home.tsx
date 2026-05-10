@@ -5,6 +5,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, Zap, Star, Shield, Tag } from 'l
 import * as LucideIcons from 'lucide-react';
 import { getListingDiscountLabel, getListingFinalPrice, getPackageSavings, hasListingDiscount, hasPackageSavings } from '../utils/pricing';
 import PriceDisplay from '../components/PriceDisplay';
+import { getMergedStoreSections, isStoreSectionEnabled } from '../utils/storeSections';
 
 interface HomeProps {
   listings: Listing[];
@@ -126,10 +127,29 @@ const ProductRailSection: React.FC<{
 const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, navigateTo, siteConfig }) => {
   const packageListings = listings.filter((listing) => listing.isPackage);
   const featuredListings = listings.slice(0, 12);
+  const topProductListings = [...listings]
+    .sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0))
+    .slice(0, 12);
+  const giftCardListings = listings
+    .filter((listing) => {
+      const text = `${listing.title} ${listing.game || ''} ${listing.category?.name || ''} ${listing.subCategory?.name || ''}`.toLowerCase();
+      return text.includes('gift') || text.includes('carte cadeau') || text.includes('gift card');
+    })
+    .slice(0, 12);
   const discountedListings = listings
     .filter((listing) => hasListingDiscount(listing))
     .sort((a, b) => getListingFinalPrice(a) - getListingFinalPrice(b));
+  const storeSections = getMergedStoreSections(siteConfig);
+  const sectionEnabled = (sectionId: string) => isStoreSectionEnabled(siteConfig, sectionId);
+  const sectionOrder = (sectionId: string) => storeSections.find((section) => section.id === sectionId)?.order || 999;
   const heroSlides = siteConfig.heroSlides?.filter((slide) => slide.imageUrl) || [];
+  const heroPromoBanners = siteConfig.heroPromoBanners?.filter((banner) => banner.imageUrl) || [];
+  const floatingBrandCards = siteConfig.floatingBrandCards?.filter((card) => card.imageUrl) || [];
+  const coverListings = (siteConfig.coverListingIds || [])
+    .map((id) => listings.find((listing) => listing.id === id && !listing.isArchived))
+    .filter((listing): listing is Listing => Boolean(listing));
+  const coverCardListings = coverListings.length > 0 ? coverListings.slice(0, 5) : featuredListings.slice(0, 5);
+  const coverBackgroundUrl = siteConfig.coverBackgroundUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80';
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
 
   React.useEffect(() => {
@@ -147,108 +167,177 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
   }, [activeSlideIndex, heroSlides.length]);
 
   const activeSlide = heroSlides[activeSlideIndex];
+  const renderHeroPromoBanner = (banner: typeof heroPromoBanners[number] | undefined, className: string) => {
+    if (!banner) return <div className={`${className} rounded-2xl bg-slate-200/60`} />;
 
-  const handleHeroAction = () => {
-    if (!activeSlide) {
+    return (
+      <button
+        key={banner.id}
+        type="button"
+        onClick={() => handleHeroLink(banner.linkType, banner.linkTarget)}
+        className={`group relative overflow-hidden rounded-2xl bg-slate-900 text-left shadow-sm transition hover:brightness-110 ${className}`}
+      >
+        <img src={banner.imageUrl} alt={banner.alt || ''} className="absolute inset-0 h-full w-full object-cover" />
+      </button>
+    );
+  };
+
+  const handleHeroLink = (linkType?: 'listing' | 'category' | 'url' | 'collections', linkTarget?: string) => {
+    if (!linkType || linkType === 'collections') {
       document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' });
       return;
     }
 
-    if (activeSlide.linkType === 'listing' && activeSlide.linkTarget) {
-      const listing = listings.find((item) => item.id === activeSlide.linkTarget);
+    if (linkType === 'listing' && linkTarget) {
+      const listing = listings.find((item) => item.id === linkTarget);
       if (listing) onViewProduct(listing);
       return;
     }
 
-    if (activeSlide.linkType === 'category' && activeSlide.linkTarget) {
-      navigateTo('category', activeSlide.linkTarget);
+    if (linkType === 'category' && linkTarget) {
+      navigateTo('category', linkTarget);
       return;
     }
 
-    if (activeSlide.linkType === 'url' && activeSlide.linkTarget) {
-      window.open(activeSlide.linkTarget, '_blank', 'noopener,noreferrer');
-      return;
+    if (linkType === 'url' && linkTarget) {
+      window.open(linkTarget, '_blank', 'noopener,noreferrer');
     }
+  };
 
-    document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' });
+  const handleHeroAction = () => {
+    handleHeroLink(activeSlide?.linkType, activeSlide?.linkTarget);
   };
 
   return (
-    <div className="space-y-16 animate-in fade-in duration-500">
-      {/* Hero Section */}
-      <div className="relative rounded-3xl overflow-hidden bg-slate-900 shadow-2xl" style={{ height: `${siteConfig.heroSlideHeight || 440}px` }}>
-        {isVideoMedia(activeSlide?.imageUrl, activeSlide?.mediaType) ? (
-          <video
-            key={activeSlide?.imageUrl}
-            className="absolute inset-0 h-full w-full object-cover opacity-45 transition-all duration-700"
-            src={activeSlide?.imageUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
-        ) : (
+    <div className="flex flex-col gap-16 animate-in fade-in duration-500">
+      {sectionEnabled('store-cover') && (
+      <section className="relative left-1/2 -mt-8 w-screen -translate-x-1/2 overflow-hidden bg-slate-950" style={{ order: sectionOrder('store-cover') }}>
+        <div className="relative">
           <img
-            className="absolute inset-0 h-full w-full object-cover opacity-40 transition-all duration-700"
-            src={activeSlide?.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'}
+            className="absolute inset-0 h-full w-full object-cover opacity-35"
+            src={coverBackgroundUrl}
             alt=""
           />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent"></div>
-        
-        <div className="relative h-full px-8 md:px-16 max-w-4xl flex items-center">
-          <div className="py-12 md:py-16">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 backdrop-blur-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-accent) 18%, transparent)', color: 'var(--theme-accent)', border: '1px solid color-mix(in srgb, var(--theme-accent) 35%, transparent)' }}>
-            <Zap size={14} fill="currentColor" />
-            <span>{activeSlide?.badge || 'Livraison Instantanée'}</span>
-          </div>
-          <h1 className="text-4xl md:text-6xl font-black text-white leading-tight mb-6">
-            {activeSlide?.title ? (
-              activeSlide.title
-            ) : (
-              <>Première plateforme digitale <span className="text-indigo-600">en Tunisie</span></>
-            )}
-          </h1>
-          <p className="text-lg text-slate-300 mb-10 max-w-xl leading-relaxed">
-            {activeSlide?.subtitle || 'Achetez vos crédits de jeux, abonnements streaming, logiciels et comptes premium en toute sécurité avec D17, Flouci ou Carte Bancaire.'}
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <button onClick={handleHeroAction} className="theme-btn px-8 py-4 rounded-xl font-bold shadow-lg shadow-slate-900/30 flex items-center">
-              {activeSlide?.ctaLabel || 'Explorer le catalogue'} <ArrowRight size={20} className="ml-2" />
-            </button>
-            <button onClick={() => document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })} className="bg-white/10 text-white px-8 py-4 rounded-xl font-bold hover:bg-white/20 transition backdrop-blur-md border border-white/10">
-              Comment ça marche ?
-            </button>
-          </div>
+          <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-white/0 to-white/10" />
+
+          <div className="relative mx-auto flex w-full max-w-[1170px] flex-col px-4 py-[50px] pb-[70px]">
+            <div className="w-full overflow-x-auto pb-2 no-scrollbar">
+              <div className="flex snap-x snap-mandatory gap-5 lg:grid lg:grid-cols-4 lg:gap-8 lg:snap-none">
+                {coverCardListings.map((listing) => (
+                  <button
+                    key={listing.id}
+                    type="button"
+                    onClick={() => onViewProduct(listing)}
+                    className="group relative h-[340px] w-[292px] shrink-0 snap-center overflow-hidden rounded-2xl bg-slate-900 text-left shadow-2xl transition duration-300 hover:shadow-xl lg:h-[432px] lg:w-full lg:hover:scale-105"
+                  >
+                    <img src={listing.imageUrl} alt={listing.title} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
+                    {hasListingDiscount(listing) && (
+                      <div className="absolute left-4 top-3 rounded-full bg-gradient-to-b from-amber-400 to-amber-700 px-2 py-0.5 text-[10px] font-black uppercase text-white">
+                        {getListingDiscountLabel(listing)}
+                      </div>
+                    )}
+                    {listing.isInstant && (
+                      <div className="absolute right-4 top-3 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-black uppercase text-white">
+                        Instant
+                      </div>
+                    )}
+                    {listing.logoUrl && <img src={listing.logoUrl} alt="" className="absolute right-4 bottom-32 h-10 w-10 rounded-lg bg-white p-1 shadow" />}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-black/65 to-black/95 p-4 text-white">
+                      <h3 className="line-clamp-3 text-2xl font-black uppercase leading-tight lg:text-3xl">{listing.title}</h3>
+                      <div className="mt-2 truncate text-sm font-bold text-slate-200">
+                        {listing.game || 'Digital'} · GLOBAL
+                      </div>
+                      <div className="mt-3 text-xs font-black uppercase text-slate-300">Sponsorisé</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-        {heroSlides.length > 1 && (
-          <>
-            <div className="absolute bottom-6 left-8 md:left-16 flex items-center gap-2 z-10">
-              {heroSlides.map((slide, index) => (
-                <button
-                  key={slide.id}
-                  type="button"
-                  onClick={() => setActiveSlideIndex(index)}
-                  className={`h-2.5 rounded-full transition-all ${index === activeSlideIndex ? 'w-10 bg-white' : 'w-2.5 bg-white/45 hover:bg-white/70'}`}
-                  aria-label={`Aller au slide ${index + 1}`}
+      </section>
+      )}
+
+      {sectionEnabled('hero-slider') && (
+      <section className="w-full" style={{ order: sectionOrder('hero-slider') }}>
+        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-4 lg:h-[clamp(430px,39vw,562px)] lg:grid-cols-3 lg:grid-rows-4">
+          <div className="relative aspect-[1440/630] overflow-hidden rounded-2xl bg-slate-900 shadow-xl lg:col-span-2 lg:row-span-3 lg:aspect-auto">
+            <button type="button" onClick={handleHeroAction} className="absolute inset-0 block w-full text-left">
+              {isVideoMedia(activeSlide?.imageUrl, activeSlide?.mediaType) ? (
+                <video
+                  key={activeSlide?.imageUrl}
+                  className="absolute inset-0 h-full w-full object-cover transition-all duration-700"
+                  src={activeSlide?.imageUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
                 />
+              ) : (
+                <img
+                  className="absolute inset-0 h-full w-full object-cover transition-all duration-700"
+                  src={activeSlide?.imageUrl || 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80'}
+                  alt={activeSlide?.title || 'Slide'}
+                />
+              )}
+            </button>
+
+            {heroSlides.length > 1 && (
+              <>
+                <button type="button" onClick={() => setActiveSlideIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length)} className="absolute left-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/15 text-white transition hover:bg-black/35">
+                  <ChevronLeft size={34} strokeWidth={3} />
+                </button>
+                <button type="button" onClick={() => setActiveSlideIndex((prev) => (prev + 1) % heroSlides.length)} className="absolute right-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/15 text-white transition hover:bg-black/35">
+                  <ChevronRight size={34} strokeWidth={3} />
+                </button>
+                <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 rounded-full bg-black/60 px-2 py-1.5">
+                  {heroSlides.map((slide, index) => (
+                    <button
+                      key={slide.id}
+                      type="button"
+                      onClick={() => setActiveSlideIndex(index)}
+                      className={`mx-1 h-3 w-3 rounded-full bg-white transition-opacity ${index === activeSlideIndex ? 'opacity-80' : 'opacity-25 hover:opacity-60'}`}
+                      aria-label={`Aller au slide ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {renderHeroPromoBanner(heroPromoBanners[0], 'aspect-[1380/700] lg:col-start-3 lg:row-span-2 lg:aspect-auto')}
+          {renderHeroPromoBanner(heroPromoBanners[1], 'aspect-[1380/400] lg:col-start-3 lg:row-start-3 lg:aspect-auto')}
+          {renderHeroPromoBanner(heroPromoBanners[2], 'aspect-[1380/400] lg:col-start-3 lg:row-start-4 lg:aspect-auto')}
+          {renderHeroPromoBanner(heroPromoBanners[3], 'aspect-[1380/400] lg:col-start-1 lg:row-start-4 lg:aspect-auto')}
+          {renderHeroPromoBanner(heroPromoBanners[4], 'aspect-[1380/400] lg:col-start-2 lg:row-start-4 lg:aspect-auto')}
+        </div>
+      </section>
+      )}
+
+      {sectionEnabled('floating-brand-cards') && floatingBrandCards.length > 0 && (
+      <section className="relative left-1/2 w-screen -translate-x-1/2 border-y border-slate-200/60 bg-white/55 py-12 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/55" style={{ order: sectionOrder('floating-brand-cards') }}>
+        <div className="mx-auto max-w-[1224px] overflow-hidden px-4 sm:px-6 lg:px-0">
+          <div className="no-scrollbar overflow-hidden">
+            <div className="floating-brand-marquee flex w-max gap-4 pr-4">
+              {[...floatingBrandCards, ...floatingBrandCards].map((card, index) => (
+              <button
+                key={`${card.id}-${index}`}
+                type="button"
+                onClick={() => handleHeroLink(card.linkType, card.linkTarget)}
+                className="group relative h-[82px] w-[150px] shrink-0 overflow-hidden rounded-[10px] transition duration-200 hover:-translate-y-1 hover:brightness-110 md:h-[100px] md:w-[190px] lg:h-[112px] lg:w-[215px]"
+              >
+                <img src={card.imageUrl} alt={card.name} className="h-full w-full object-cover" />
+              </button>
               ))}
             </div>
-            <div className="absolute right-6 bottom-6 z-10 flex gap-2">
-              <button type="button" onClick={() => setActiveSlideIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length)} className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/20 text-white backdrop-blur-sm hover:bg-white/10">
-                <ChevronLeft size={18} />
-              </button>
-              <button type="button" onClick={() => setActiveSlideIndex((prev) => (prev + 1) % heroSlides.length)} className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/20 text-white backdrop-blur-sm hover:bg-white/10">
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      </section>
+      )}
 
-      {/* Categories Grid */}
-      <section id="collections">
+      {sectionEnabled('collections') && (
+      <section id="collections" style={{ order: sectionOrder('collections') }}>
         <div className="flex justify-between items-end mb-8">
           <div>
             <h2 className="text-3xl font-black text-slate-900 mb-2">Collections Populaires</h2>
@@ -285,7 +374,10 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
           ))}
         </div>
       </section>
+      )}
 
+      {sectionEnabled('packages') && (
+      <div style={{ order: sectionOrder('packages') }}>
       <ProductRailSection
         railId="home-packages-rail"
         title="Packages Disponibles"
@@ -298,7 +390,45 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
           </span>
         }
       />
+      </div>
+      )}
 
+      {sectionEnabled('top-products') && (
+      <div style={{ order: sectionOrder('top-products') }}>
+      <ProductRailSection
+        railId="home-top-products-rail"
+        title="Top Products"
+        subtitle="Les produits les plus performants du store, prêts à être mis en avant."
+        listings={topProductListings}
+        onViewProduct={onViewProduct}
+        accent={
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-700">
+            <LucideIcons.Trophy size={12} /> Top
+          </span>
+        }
+      />
+      </div>
+      )}
+
+      {sectionEnabled('gift-cards') && (
+      <div style={{ order: sectionOrder('gift-cards') }}>
+      <ProductRailSection
+        railId="home-gift-cards-rail"
+        title="Gift Cards"
+        subtitle="Cartes cadeau, crédits prépayés et offres digitales faciles à offrir."
+        listings={giftCardListings}
+        onViewProduct={onViewProduct}
+        accent={
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+            <LucideIcons.Gift size={12} /> Gift
+          </span>
+        }
+      />
+      </div>
+      )}
+
+      {sectionEnabled('trending') && (
+      <div style={{ order: sectionOrder('trending') }}>
       <ProductRailSection
         railId="home-trending-rail"
         title="Tendances du Moment"
@@ -306,7 +436,11 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
         listings={featuredListings}
         onViewProduct={onViewProduct}
       />
+      </div>
+      )}
 
+      {sectionEnabled('discounts') && (
+      <div style={{ order: sectionOrder('discounts') }}>
       <ProductRailSection
         railId="home-discounts-rail"
         title="Produits Soldés"
@@ -319,9 +453,11 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
           </span>
         }
       />
+      </div>
+      )}
 
-      {/* Trust Badges */}
-      <section className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+      {sectionEnabled('trust-badges') && (
+      <section className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-8 text-center" style={{ order: sectionOrder('trust-badges') }}>
          <div>
             <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
                <Zap size={32} />
@@ -344,6 +480,7 @@ const Home: React.FC<HomeProps> = ({ listings, categories, onViewProduct, naviga
             <p className="text-sm text-slate-500">Une équipe dédiée disponible à tout moment pour vous assister.</p>
          </div>
       </section>
+      )}
     </div>
   );
 };

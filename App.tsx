@@ -1,21 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import AdminLayout from './components/AdminLayout';
 import Layout from './components/Layout';
-import PriceDisplay from './components/PriceDisplay';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Subscription from './pages/Subscription';
 import Cart from './pages/Cart';
-import AiTools from './pages/AiTools';
 import CategoryPage from './pages/CategoryPage';
+import ProductPage from './pages/ProductPage';
 import { AdminDashboard, UserDashboard } from './pages/Dashboards';
 import { User, UserRole, Listing, Order, OrderStatus, SubscriptionTier, Category, SiteConfig } from './types';
 import { api } from './services/api';
 import * as LucideIcons from 'lucide-react';
-import { getListingFinalPrice, getPackageOriginalTotal, getPackageSavings, hasPackageSavings } from './utils/pricing';
 import { addGuestCartItem, getGuestCartCount } from './utils/guestCart';
-import { sanitizeRichText } from './utils/richText';
 
 const INITIAL_GUEST: User = { id: 'guest', username: 'Invité', email: '', role: UserRole.GUEST, balance: 0, avatarUrl: 'https://via.placeholder.com/150', subscriptionTier: SubscriptionTier.FREE };
 
@@ -111,7 +108,8 @@ const App: React.FC = () => {
   
   const [cartCount, setCartCount] = useState(0);
   const [notification, setNotification] = useState<NotificationState>({ show: false, message: '', type: 'success' });
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>({ logoUrl: '', siteName: 'Tunidex' });
+  const notificationTimerRef = useRef<number | null>(null);
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>({ logoUrl: '', siteName: 'Tunidex', logoSize: 32, heroPromoBanners: [], floatingBrandCards: [], storeSections: [] });
   const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation>(null);
   const [isAuthResolved, setIsAuthResolved] = useState(!localStorage.getItem('token'));
   const publicListings = listings.filter((listing) => !listing.isArchived);
@@ -209,8 +207,17 @@ const App: React.FC = () => {
   };
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    if (notificationTimerRef.current) {
+      window.clearTimeout(notificationTimerRef.current);
+      notificationTimerRef.current = null;
+    }
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 3000);
+    if (type === 'success') {
+      notificationTimerRef.current = window.setTimeout(() => {
+        setNotification({ show: false, message: '', type: 'success' });
+        notificationTimerRef.current = null;
+      }, 1500);
+    }
   };
 
   const handleLoginSuccess = (token: string, user: User) => {
@@ -369,7 +376,6 @@ const App: React.FC = () => {
       case 'category': {
         const cat = categories.find(c => c.slug === currentSlug);
         if(!cat) return <div className="p-8 text-center text-indigo-500">Catégorie introuvable</div>;
-        if(cat.slug === 'ai-tools') return <AiTools listings={publicListings} onViewProduct={handleViewProduct} navigateTo={navigateTo} />;
         
         // Robust icon lookup
         const icons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>;
@@ -392,136 +398,19 @@ const App: React.FC = () => {
 
       case 'product': {
         if (!selectedProduct || selectedProduct.isArchived) return <Home listings={publicListings} categories={categories} onViewProduct={handleViewProduct} navigateTo={navigateTo} siteConfig={siteConfig} />;
-        const packageOriginalTotal = getPackageOriginalTotal(selectedProduct);
-        const packageSavings = getPackageSavings(selectedProduct);
-        const productVariants = selectedProduct.variants || [];
-        const selectedVariant = productVariants.find((variant) => variant.id === selectedVariantId);
-        const variantLabel = selectedProduct.variantLabel?.trim() || 'Variante';
         return (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-5xl mx-auto my-8 animate-in fade-in zoom-in duration-300">
-                <button onClick={() => navigateTo('home')} className="mb-6 text-slate-500 hover:text-indigo-600 font-medium flex items-center"><LucideIcons.ArrowLeft size={16} className="mr-2"/> Retour à la boutique</button>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                    <div>
-                        <img src={selectedProduct.imageUrl} className="rounded-2xl w-full h-auto object-cover shadow-lg mb-4 hover:scale-[1.02] transition-transform duration-500" />
-                        {selectedProduct.gallery && selectedProduct.gallery.length > 0 && (
-                            <div className="grid grid-cols-4 gap-2">
-                                {selectedProduct.gallery.map((img, i) => (
-                                    <img key={i} src={img} className="rounded-lg border cursor-pointer hover:border-indigo-500 hover:opacity-80 transition" onClick={(e) => ((e.target as HTMLImageElement).parentNode?.previousSibling as HTMLImageElement).src = img} />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold text-indigo-600 uppercase tracking-wider mb-2">{selectedProduct.game}</span>
-                        <h1 className="text-4xl font-black mb-4 text-slate-900">{selectedProduct.title}</h1>
-                        {selectedProduct.isPackage && (
-                          <div className="mb-4 flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-indigo-700">Package</span>
-                            {hasPackageSavings(selectedProduct) && (
-                              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
-                                Économie {packageSavings.toFixed(2)} TND
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        <div className="flex items-center space-x-4 mb-6">
-                           <PriceDisplay
-                             listing={selectedProduct}
-                             priceClassName="text-5xl font-black text-slate-900"
-                             oldPriceClassName="text-lg font-semibold text-slate-400 line-through"
-                             suffixClassName="text-lg font-medium text-slate-500"
-                           />
-                           {selectedProduct.stock > 0 ? <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">En Stock</span> : <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">Rupture</span>}
-                        </div>
-                        
-                        <div
-                          className="rich-product-description mb-8"
-                          dangerouslySetInnerHTML={{ __html: sanitizeRichText(selectedProduct.description) }}
-                        />
-
-                        {productVariants.length > 0 && (
-                          <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                            <div className="mb-4">
-                              <h2 className="text-lg font-black text-slate-900">Choisir {variantLabel}</h2>
-                              <p className="text-sm text-slate-500">Sélectionnez {variantLabel.toLowerCase()} avant l’ajout au panier.</p>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {productVariants.map((variant) => (
-                                <button
-                                  key={variant.id}
-                                  type="button"
-                                  onClick={() => setSelectedVariantId(variant.id || '')}
-                                  className={`rounded-2xl border p-4 text-left transition-all ${
-                                    selectedVariantId === variant.id
-                                      ? 'border-indigo-600 bg-indigo-50 shadow-md shadow-indigo-100'
-                                      : 'border-slate-200 bg-white hover:border-indigo-200'
-                                  }`}
-                                >
-                                  <div className="font-black text-slate-900">{variant.name}</div>
-                                  <div className="mt-1 text-xl font-black text-indigo-600">{Number(variant.price).toFixed(2)} TND</div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {selectedProduct.isPackage && selectedProduct.packageItems && selectedProduct.packageItems.length > 0 && (
-                          <div className="mb-8 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
-                            <div className="mb-4 flex items-center justify-between gap-4">
-                              <div>
-                                <h2 className="text-lg font-black text-slate-900">Contenu du package</h2>
-                                <p className="text-sm text-slate-500">Produits inclus dans ce pack.</p>
-                              </div>
-                              {packageOriginalTotal > 0 && (
-                                <div className="text-right">
-                                  <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Valeur séparée</div>
-                                  <div className="text-lg font-black text-slate-900">{packageOriginalTotal.toFixed(2)} TND</div>
-                                </div>
-                              )}
-                            </div>
-                            <div className="space-y-3">
-                              {selectedProduct.packageItems.map((item) => (
-                                <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 border border-slate-100">
-                                  <div className="min-w-0">
-                                    <div className="font-bold text-slate-900 truncate">{item.includedListing?.title || 'Produit inclus'}</div>
-                                    {item.includedListing && (
-                                      <div className="text-xs text-slate-500">
-                                        {item.quantity} x {getListingFinalPrice(item.includedListing).toFixed(2)} TND
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="text-sm font-bold text-slate-700">
-                                    x{item.quantity}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                            {hasPackageSavings(selectedProduct) && (
-                              <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-                                Vous gagnez {packageSavings.toFixed(2)} TND par rapport à l’achat séparé.
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        
-                        <div className="mt-auto space-y-4">
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
-                                <div className="flex items-center text-slate-600">
-                                    <LucideIcons.Clock size={18} className="mr-2 text-indigo-500" />
-                                    <span className="text-sm font-medium">Disponibilité:</span>
-                                </div>
-                                <span className={`text-sm font-bold ${selectedProduct.isInstant ? 'text-green-600' : 'text-amber-600'}`}>
-                                    {selectedProduct.isInstant ? 'Instantanée' : selectedProduct.preparationTime}
-                                </span>
-                            </div>
-                            <button onClick={() => handleAddToCart(selectedProduct)} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-1 text-lg">
-                                Ajouter au Panier{selectedVariant ? ` - ${Number(selectedVariant.price).toFixed(2)} TND` : ''}
-                            </button>
-                            <p className="text-center text-xs text-slate-400">Livraison estimée: {selectedProduct.isInstant ? 'Immédiate' : selectedProduct.preparationTime}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+          <ProductPage
+            product={selectedProduct}
+            categories={categories}
+            selectedVariantId={selectedVariantId}
+            onSelectVariant={setSelectedVariantId}
+            onAddToCart={() => handleAddToCart(selectedProduct)}
+            onBuyNow={async () => {
+              await handleAddToCart(selectedProduct);
+              navigateTo('cart');
+            }}
+            navigateTo={navigateTo}
+          />
         );
       }
       case 'admin-dashboard':

@@ -19,7 +19,16 @@ interface CategoryPageProps {
   subCategories?: SubCategory[];
 }
 
+const isImageIconValue = (value?: string) => {
+  const normalized = value?.trim() || '';
+  return /^(https?:\/\/|data:image\/|blob:|\/)/i.test(normalized);
+};
+
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
+  if (isImageIconValue(name)) {
+    return <img src={name} alt="" className={`${className || 'w-6 h-6'} object-contain`} referrerPolicy="no-referrer" />;
+  }
+
   const icons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>;
   const IconComponent = icons[name] || icons[name.trim()] || icons.LayoutGrid;
   return <IconComponent size={24} className={className} />;
@@ -133,37 +142,49 @@ const CategoryPage: React.FC<CategoryPageProps> = ({
         </div>
       </div>
 
-      {/* Sub Category Cards Grid */}
+      {/* Sub Category Icon Rail */}
       {subCategories && subCategories.length > 0 && (
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div 
-                onClick={() => setSelectedSubCategory(null)} 
-                className={`cursor-pointer bg-white p-6 rounded-2xl shadow-sm border transition-all flex items-start space-x-4 hover:shadow-md ${selectedSubCategory === null ? 'border-slate-900 ring-2 ring-slate-900 bg-slate-50' : 'border-slate-100'}`}
-            >
-                <div className="p-3 bg-slate-100 rounded-xl">
-                    <LayoutGrid className="text-slate-700" size={24} />
-                </div>
-                <div>
-                    <h3 className="font-bold text-slate-900">Tout Voir</h3>
-                    <p className="text-xs text-slate-500 mt-1">Tous les produits</p>
-                </div>
-            </div>
+         <div className="overflow-x-auto no-scrollbar">
+            <div className="flex w-max min-w-full items-stretch gap-3 pb-1">
+              <button
+                  type="button"
+                  onClick={() => setSelectedSubCategory(null)}
+                  className={`flex h-20 min-w-[132px] items-center gap-3 rounded-xl border bg-white px-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                    selectedSubCategory === null ? 'border-slate-900 bg-slate-50 ring-2 ring-slate-900/10' : 'border-slate-100'
+                  }`}
+              >
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                    selectedSubCategory === null ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                      <LayoutGrid size={21} />
+                  </span>
+                  <span className="min-w-0">
+                      <span className="block text-sm font-black leading-tight text-slate-900">Tout voir</span>
+                      <span className="mt-0.5 block text-[11px] font-semibold text-slate-400">{categoryListings.length} produits</span>
+                  </span>
+              </button>
 
             {subCategories.map((sub) => (
-               <div 
-                 key={sub.id} 
+               <button
+                 type="button"
+                 key={sub.id}
                  onClick={() => setSelectedSubCategory(sub.id)}
-                 className={`cursor-pointer bg-white p-6 rounded-2xl shadow-sm border transition-all flex items-start space-x-4 hover:shadow-md ${selectedSubCategory === sub.id ? 'border-indigo-600 ring-1 ring-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                 className={`flex h-20 min-w-[132px] max-w-[190px] items-center gap-3 rounded-xl border bg-white px-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                  selectedSubCategory === sub.id ? 'border-indigo-600 bg-indigo-50 ring-2 ring-indigo-600/10' : 'border-slate-100'
+                 }`}
                >
-                  <div className="p-3 bg-slate-50 rounded-xl text-indigo-600">
-                    <DynamicIcon name={sub.icon || 'Package'} className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900">{sub.name}</h3>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-1">{sub.description || 'Collection'}</p>
-                  </div>
-               </div>
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                    selectedSubCategory === sub.id ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'
+                  }`}>
+                    <DynamicIcon name={sub.icon || 'Package'} className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-black leading-tight text-slate-900">{sub.name}</span>
+                    <span className="mt-0.5 block truncate text-[11px] font-semibold text-slate-400">{sub.description || 'Collection'}</span>
+                  </span>
+               </button>
             ))}
+            </div>
          </div>
       )}
 
@@ -178,20 +199,6 @@ const CategoryPage: React.FC<CategoryPageProps> = ({
                   : `${groupedBrands.length} marques disponibles`}
             </div>
             <div className="flex w-full md:w-auto flex-col md:flex-row gap-3">
-              {subCategories && subCategories.length > 0 && (
-                <select
-                  className="w-full md:w-64 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
-                  value={selectedSubCategory || ''}
-                  onChange={(e) => setSelectedSubCategory(e.target.value || null)}
-                >
-                  <option value="">Toutes les sous-catégories</option>
-                  {subCategories.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  ))}
-                </select>
-              )}
               <div className="relative w-full md:w-96">
                   <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type="text" placeholder={selectedBrandGroup || shouldShowDirectListings ? "Rechercher un produit..." : "Rechercher une marque ou un produit..."} className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />

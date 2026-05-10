@@ -1,0 +1,12 @@
+ALTER TABLE "Listing" ADD COLUMN "systemRequirementsEnabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Listing" ADD COLUMN "systemRequirementsPlatform" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "minimumOs" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "minimumMemory" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "minimumStorage" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "minimumProcessor" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "minimumGraphics" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "recommendedOs" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "recommendedMemory" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "recommendedStorage" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "recommendedProcessor" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "recommendedGraphics" TEXT;

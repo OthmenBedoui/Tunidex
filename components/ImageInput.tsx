@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Link as LinkIcon, X } from 'lucide-react';
 
-type UploadPreset = 'default' | 'siteLogo' | 'favicon' | 'avatar';
+type UploadPreset = 'default' | 'siteLogo' | 'favicon' | 'avatar' | 'icon';
 
 interface ImageInputProps {
   value: string;
@@ -17,6 +17,7 @@ const PRESET_CONFIG: Record<UploadPreset, { maxWidth: number; maxHeight: number;
   siteLogo: { maxWidth: 900, maxHeight: 240, quality: 0.86, outputType: 'image/webp', previewFit: 'contain', maxBytes: 700_000 },
   favicon: { maxWidth: 128, maxHeight: 128, quality: 0.9, outputType: 'image/png', previewFit: 'contain', maxBytes: 150_000 },
   avatar: { maxWidth: 512, maxHeight: 512, quality: 0.88, outputType: 'image/webp', previewFit: 'cover', maxBytes: 500_000 },
+  icon: { maxWidth: 256, maxHeight: 256, quality: 0.9, outputType: 'image/png', previewFit: 'contain', maxBytes: 220_000 },
 };
 
 const estimateDataUrlBytes = (dataUrl: string) => {
@@ -175,7 +176,9 @@ export const ImageInput: React.FC<ImageInputProps> = ({ value, onChange, label, 
                   ? 'Logo PNG/WebP horizontal auto-optimisé pour rester compatible.'
                   : uploadPreset === 'favicon'
                     ? 'Icône optimisée en petit format.'
-                    : 'Image automatiquement redimensionnée et compressée.'}
+                    : uploadPreset === 'icon'
+                      ? 'Icône PNG/WebP/SVG optimisée.'
+                      : 'Image automatiquement redimensionnée et compressée.'}
               </span>
               <input 
                 type="file" 

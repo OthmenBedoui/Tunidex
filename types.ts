@@ -74,7 +74,7 @@ export interface SubCategory {
   name: string;
   slug: string;
   categoryId: string;
-  icon?: string;
+  icon?: string; // Lucide icon name, image URL, or uploaded data URL
   description?: string;
   order?: number;
 }
@@ -121,6 +121,27 @@ export interface Listing {
 
   // Meta
   game?: string; // Keep for legacy/search (e.g. "Valorant")
+  platform?: string;
+  region?: string;
+  activationCountry?: string;
+  activationGuideTitle?: string;
+  activationGuideContent?: string;
+  restrictionsTitle?: string;
+  restrictionsContent?: string;
+  regionTitle?: string;
+  regionContent?: string;
+  systemRequirementsEnabled?: boolean;
+  systemRequirementsPlatform?: string;
+  minimumOs?: string;
+  minimumMemory?: string;
+  minimumStorage?: string;
+  minimumProcessor?: string;
+  minimumGraphics?: string;
+  recommendedOs?: string;
+  recommendedMemory?: string;
+  recommendedStorage?: string;
+  recommendedProcessor?: string;
+  recommendedGraphics?: string;
   stock: number;
   deliveryTimeHours: number;
   isInstant: boolean;
@@ -141,10 +162,16 @@ export interface Listing {
 export interface SiteConfig {
   logoUrl: string;
   siteName: string;
+  logoSize?: number;
   faviconUrl?: string;
   primaryColor?: string;
   heroSlides?: HeroSlide[];
+  heroPromoBanners?: HeroPromoBanner[];
+  floatingBrandCards?: FloatingBrandCard[];
   heroSlideHeight?: number;
+  coverBackgroundUrl?: string;
+  coverListingIds?: string[];
+  storeSections?: StoreSectionConfig[];
   accentColor?: string;
   accentHoverColor?: string;
   accentSoftColor?: string;
@@ -174,6 +201,12 @@ export interface SiteConfig {
   click2payApiKey?: string;
 }
 
+export interface StoreSectionConfig {
+  id: string;
+  enabled: boolean;
+  order?: number;
+}
+
 export interface HeroSlide {
   id: string;
   imageUrl: string;
@@ -182,6 +215,22 @@ export interface HeroSlide {
   title?: string;
   subtitle?: string;
   ctaLabel?: string;
+  linkType?: 'listing' | 'category' | 'url' | 'collections';
+  linkTarget?: string;
+}
+
+export interface HeroPromoBanner {
+  id: string;
+  imageUrl: string;
+  alt?: string;
+  linkType?: 'listing' | 'category' | 'url' | 'collections';
+  linkTarget?: string;
+}
+
+export interface FloatingBrandCard {
+  id: string;
+  name: string;
+  imageUrl: string;
   linkType?: 'listing' | 'category' | 'url' | 'collections';
   linkTarget?: string;
 }

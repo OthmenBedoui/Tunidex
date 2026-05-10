@@ -85,7 +85,7 @@ export const api = {
   updateUserBalance: (userId: string, balance: number) => fetchWithFallback(`${API_URL}/users/${userId}/balance`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({balance}) }),
 
   // Site Config
-  getSiteConfig: () => fetchWithFallback<SiteConfig>(`${API_URL}/config`, undefined, { logoUrl: 'https://via.placeholder.com/150', siteName: 'Tunidex' }),
+  getSiteConfig: () => fetchWithFallback<SiteConfig>(`${API_URL}/config`, undefined, { logoUrl: 'https://via.placeholder.com/150', siteName: 'Tunidex', logoSize: 32, heroPromoBanners: [], floatingBrandCards: [], storeSections: [] }),
   updateSiteConfig: (config: Partial<SiteConfig>) => fetchWithFallback<SiteConfig>(`${API_URL}/config`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(config) }),
 
   // Analytics

@@ -12,10 +12,16 @@ const legacySiteConfigPath = path.join(process.cwd(), 'server', 'data', 'site-co
 type SiteConfigData = {
     logoUrl: string;
     siteName: string;
+    logoSize: number;
     faviconUrl: string;
     primaryColor: string;
     heroSlides: unknown[];
+    heroPromoBanners: unknown[];
+    floatingBrandCards: unknown[];
     heroSlideHeight: number;
+    coverBackgroundUrl: string;
+    coverListingIds: string[];
+    storeSections: Array<{ id: string; enabled: boolean; order?: number }>;
     accentColor: string;
     accentHoverColor: string;
     accentSoftColor: string;
@@ -46,10 +52,27 @@ type SiteConfigData = {
 const defaultSiteConfig: SiteConfigData = {
     logoUrl: '',
     siteName: 'Tunidex',
+    logoSize: 32,
     faviconUrl: '',
     primaryColor: '',
     heroSlides: [],
+    heroPromoBanners: [],
+    floatingBrandCards: [],
     heroSlideHeight: 440,
+    coverBackgroundUrl: '',
+    coverListingIds: [],
+    storeSections: [
+        { id: 'store-cover', enabled: true, order: 10 },
+        { id: 'hero-slider', enabled: true, order: 20 },
+        { id: 'floating-brand-cards', enabled: true, order: 25 },
+        { id: 'collections', enabled: true, order: 30 },
+        { id: 'packages', enabled: true, order: 40 },
+        { id: 'top-products', enabled: true, order: 50 },
+        { id: 'gift-cards', enabled: true, order: 60 },
+        { id: 'trending', enabled: true, order: 70 },
+        { id: 'discounts', enabled: true, order: 80 },
+        { id: 'trust-badges', enabled: true, order: 90 }
+    ],
     accentColor: '#4f46e5',
     accentHoverColor: '#4338ca',
     accentSoftColor: '#e0e7ff',

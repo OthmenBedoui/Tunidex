@@ -1,0 +1,9 @@
+ALTER TABLE "Listing" ADD COLUMN "platform" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "region" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "activationCountry" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "activationGuideTitle" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "activationGuideContent" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "restrictionsTitle" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "restrictionsContent" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "regionTitle" TEXT;
+ALTER TABLE "Listing" ADD COLUMN "regionContent" TEXT;
