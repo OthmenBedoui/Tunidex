@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server/index.ts",
+    "start": "tsx server/index.ts",
     "build": "tsc && vite build",
+    "db:generate": "prisma generate --schema server/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema server/schema.prisma",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },

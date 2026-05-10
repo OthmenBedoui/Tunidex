@@ -6,6 +6,10 @@ import path from 'path';
 
 const SITE_CONFIG_KEY = 'site';
 const legacySiteConfigPath = path.join(process.cwd(), 'server', 'data', 'site-config.json');
+const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@tunibots.com';
+const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'l$?oF&9/35W?';
+const DEFAULT_AGENT_EMAIL = process.env.DEFAULT_AGENT_EMAIL || 'agent@tunibots.com';
+const DEFAULT_AGENT_PASSWORD = process.env.DEFAULT_AGENT_PASSWORD || DEFAULT_ADMIN_PASSWORD;
 
 const defaultSiteConfig = {
   logoUrl: '',
@@ -91,24 +95,26 @@ export const seedDatabase = async () => {
   try {
     await seedSiteConfig();
 
-    const hashedPwd = await bcrypt.hash("123456", 10);
     const ensureStaffAccount = async ({
       email,
       username,
       role,
       subscriptionTier,
-      avatarUrl
+      avatarUrl,
+      password
     }: {
       email: string;
       username: string;
       role: string;
       subscriptionTier: string;
       avatarUrl: string;
+      password: string;
     }) => {
       const existing = await prisma.user.findUnique({ where: { email } });
 
       if (!existing) {
         console.log(`🛠️ Création ${role} (${email})...`);
+        const hashedPwd = await bcrypt.hash(password, 10);
         await prisma.user.create({
           data: {
             email,
@@ -142,25 +148,20 @@ export const seedDatabase = async () => {
 
     // 1. Users (Admin & Agent)
     await ensureStaffAccount({
-      email: "johnson67377@gmail.com",
-      username: "UserAdmin",
-      role: "ADMIN",
-      subscriptionTier: "Elite",
-      avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
-    });
-    await ensureStaffAccount({
-      email: "admin@tunidex.tn",
+      email: DEFAULT_ADMIN_EMAIL,
       username: "SuperAdmin",
       role: "ADMIN",
       subscriptionTier: "Elite",
-      avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Admin"
+      avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Admin",
+      password: DEFAULT_ADMIN_PASSWORD
     });
     await ensureStaffAccount({
-      email: "agent@tunidex.tn",
+      email: DEFAULT_AGENT_EMAIL,
       username: "SupportAgent",
       role: "AGENT",
       subscriptionTier: "Pro",
-      avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Agent"
+      avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Agent",
+      password: DEFAULT_AGENT_PASSWORD
     });
 
     // 2. Categories & SubCategories

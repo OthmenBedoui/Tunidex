@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tunidex}
+      POSTGRES_USER: ${POSTGRES_USER:-tunidex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tunidex_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tunidex} -d ${POSTGRES_DB:-tunidex}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tunidex}:${POSTGRES_PASSWORD:-tunidex_password}@db:5432/${POSTGRES_DB:-tunidex}
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+      API_KEY: ${API_KEY:-}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@tunibots.com}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      DEFAULT_AGENT_EMAIL: ${DEFAULT_AGENT_EMAIL:-agent@tunibots.com}
+      DEFAULT_AGENT_PASSWORD: ${DEFAULT_AGENT_PASSWORD:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  postgres_data:
