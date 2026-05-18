@@ -1,6 +1,7 @@
 
 import express from 'express';
 import { cleanSiteData, exportSiteData, getStats, getAllUsers, getAllOrders, getSiteConfig, importSiteData, resendOrderInvoiceEmail, sendTestEmail, updateSiteConfig, updateUserRole, updateUserBalance, updateOrderStatus } from '../controllers/adminController.js';
+import { getAuthProviders, updateAuthProvider } from '../controllers/authProviderController.js';
 import { getSeoAnalytics, trackSiteVisit } from '../controllers/seoController.js';
 import { confirmEmailChange, deleteAccount, requestEmailChange, updateProfile, updateSubscription } from '../controllers/authController.js';
 import { authenticate, isStaff, isAdmin } from '../middleware/auth.js';
@@ -23,6 +24,8 @@ router.patch('/users/:id/role', authenticate, isAdmin, updateUserRole);
 router.patch('/users/:id/balance', authenticate, isAdmin, updateUserBalance);
 router.get('/config', getSiteConfig);
 router.patch('/config', authenticate, isAdmin, updateSiteConfig);
+router.get('/admin/auth-providers', authenticate, isAdmin, getAuthProviders);
+router.patch('/admin/auth-providers/:providerKey', authenticate, isAdmin, updateAuthProvider);
 router.post('/admin/email/test', authenticate, isAdmin, sendTestEmail);
 router.get('/admin/data/export', authenticate, isAdmin, exportSiteData);
 router.post('/admin/data/import', authenticate, isAdmin, importSiteData);

@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import prisma from '../prisma.js';
 import { Prisma } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'secret-key-g2g-tunisie';
 
 const normalizeDiscountPercent = (value: unknown) => {
   const parsed = Number(value);
@@ -66,6 +69,34 @@ const normalizeVariants = (value: unknown) => {
     .filter((variant): variant is { name: string; price: number; order: number } => Boolean(variant));
 };
 
+const normalizeSourceUrl = (value: unknown) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('Le lien source doit utiliser http ou https.');
+    }
+    return parsed.toString();
+  } catch {
+    throw new Error('Le champ source doit etre un lien valide.');
+  }
+};
+
+const isAdminRequest = (req: Request) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return false;
+
+  try {
+    const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET) as { role?: string };
+    return decoded.role === 'ADMIN';
+  } catch {
+    return false;
+  }
+};
+
 const computePackageStock = (packageItems: Array<{ quantity: number; includedListing: { stock: number } }>) => {
   if (packageItems.length === 0) return 0;
 
@@ -87,6 +118,7 @@ const serializeNestedListing = (listing: {
 const serializeListing = (listing: {
   gallery: string | null;
   isPackage?: boolean | null;
+  source?: string | null;
   packageItems?: Array<{
     id: string;
     packageListingId: string;
@@ -99,7 +131,7 @@ const serializeListing = (listing: {
     };
   }>;
   [key: string]: unknown;
-}) => {
+}, options?: { includeSource?: boolean }) => {
   const serializedPackageItems = Array.isArray(listing.packageItems)
     ? listing.packageItems.map((item) => ({
         ...item,
@@ -107,12 +139,18 @@ const serializeListing = (listing: {
       }))
     : [];
 
-  return {
+  const serializedListing = {
     ...listing,
     gallery: JSON.parse(listing.gallery || '[]'),
     stock: listing.isPackage ? computePackageStock(serializedPackageItems) : listing.stock,
     packageItems: serializedPackageItems
   };
+
+  if (!options?.includeSource) {
+    delete (serializedListing as { source?: string | null }).source;
+  }
+
+  return serializedListing;
 };
 
 const getListingInclude = () => ({
@@ -188,12 +226,13 @@ const validatePackageItems = async (listingId: string | null, packageItems: Arra
  *               items:
  *                 $ref: '#/components/schemas/Listing'
  */
-export const getListings = async (_req: Request, res: Response) => {
+export const getListings = async (req: Request, res: Response) => {
+  const includeSource = isAdminRequest(req);
   const listings = await prisma.listing.findMany({
     include: getListingInclude(),
     orderBy: { createdAt: 'desc' }
   });
-  res.json(listings.map(serializeListing));
+  res.json(listings.map((listing) => serializeListing(listing, { includeSource })));
 };
 
 /**
@@ -219,6 +258,7 @@ export const getListings = async (_req: Request, res: Response) => {
  *               $ref: '#/components/schemas/Listing'
  */
 export const createListing = async (req: Request, res: Response) => {
+  const includeSource = isAdminRequest(req);
   const {
     game,
     title,
@@ -226,6 +266,7 @@ export const createListing = async (req: Request, res: Response) => {
     subCategoryId,
     description,
     price,
+    source,
     variantLabel,
     discountPercent,
     discountType,
@@ -271,6 +312,7 @@ export const createListing = async (req: Request, res: Response) => {
   const normalizedPackageItems = normalizePackageItems(packageItems);
   const normalizedVariants = normalizeVariants(variants);
   const nextIsPackage = Boolean(isPackage);
+  const normalizedSource = includeSource ? normalizeSourceUrl(source) : null;
   const normalizedDiscountType = normalizeDiscountType(discountType);
   const normalizedDiscountValue =
     normalizedDiscountType === 'PERCENT'
@@ -288,6 +330,7 @@ export const createListing = async (req: Request, res: Response) => {
       game: game || null,
       platform: platform || null,
       region: region || null,
+      source: normalizedSource,
       activationCountry: activationCountry || null,
       activationGuideTitle: activationGuideTitle || null,
       activationGuideContent: activationGuideContent || null,
@@ -344,7 +387,7 @@ export const createListing = async (req: Request, res: Response) => {
     },
     include: getListingInclude()
   });
-  res.json(serializeListing(listing));
+  res.json(serializeListing(listing, { includeSource }));
 };
 
 /**
@@ -438,6 +481,7 @@ export const deleteListing = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/Listing'
  */
 export const updateListing = async (req: Request, res: Response) => {
+  const includeSource = isAdminRequest(req);
   const { id } = req.params;
   const {
     game,
@@ -446,6 +490,7 @@ export const updateListing = async (req: Request, res: Response) => {
     subCategoryId,
     description,
     price,
+    source,
     variantLabel,
     discountPercent,
     discountType,
@@ -491,6 +536,7 @@ export const updateListing = async (req: Request, res: Response) => {
   const normalizedPackageItems = normalizePackageItems(packageItems);
   const normalizedVariants = normalizeVariants(variants);
   const nextIsPackage = Boolean(isPackage);
+  const normalizedSource = includeSource ? normalizeSourceUrl(source) : null;
   const normalizedDiscountType = normalizeDiscountType(discountType);
   const normalizedDiscountValue =
     normalizedDiscountType === 'PERCENT'
@@ -509,6 +555,7 @@ export const updateListing = async (req: Request, res: Response) => {
       game: game || null,
       platform: platform || null,
       region: region || null,
+      ...(includeSource ? { source: normalizedSource } : {}),
       activationCountry: activationCountry || null,
       activationGuideTitle: activationGuideTitle || null,
       activationGuideContent: activationGuideContent || null,
@@ -572,7 +619,7 @@ export const updateListing = async (req: Request, res: Response) => {
     include: getListingInclude()
   });
 
-  res.json(serializeListing(listing));
+  res.json(serializeListing(listing, { includeSource }));
 };
 
 // --- CATEGORIES ---

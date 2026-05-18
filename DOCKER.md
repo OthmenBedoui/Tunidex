@@ -15,10 +15,22 @@ DEFAULT_ADMIN_EMAIL=admin@tunibots.com
 DEFAULT_ADMIN_PASSWORD=...
 ```
 
+Notes:
+
+- `DATABASE_URL` is generated automatically inside the app container from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+- If a secret contains `$`, wrap the value in single quotes inside `.env` so Docker Compose keeps it literal.
+- Passwords may contain special characters such as `$` or `@`; the startup script encodes them correctly for Prisma.
+
 3. Build and start:
 
 ```bash
 docker compose up -d --build
+```
+
+Or use the deployment script:
+
+```bash
+./deploy.sh
 ```
 
 The app will be available on:

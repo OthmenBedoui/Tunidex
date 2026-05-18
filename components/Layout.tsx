@@ -233,7 +233,8 @@ const Layout: React.FC<LayoutProps> = ({
                 <button onClick={() => navigateTo('about')} className="block hover:text-white">À propos</button>
                 <button onClick={() => navigateTo('contact')} className="block hover:text-white">Contact</button>
                 <button onClick={() => navigateTo('privacy-policy')} className="block hover:text-white">Privacy Policy</button>
-                <button onClick={() => navigateTo('terms')} className="block hover:text-white">Terms</button>
+                <button onClick={() => navigateTo('terms')} className="block hover:text-white">Terms of Service</button>
+                <button onClick={() => navigateTo('data-deletion')} className="block hover:text-white">Data Deletion</button>
                 <button onClick={() => navigateTo('cart')} className="block hover:text-white">Panier</button>
                 <button onClick={() => navigateTo('login')} className="block hover:text-white">Connexion</button>
                 <button onClick={() => navigateTo('register')} className="block hover:text-white">{siteConfig.headerCtaLabel || "S'inscrire"}</button>

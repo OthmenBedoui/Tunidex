@@ -2,16 +2,18 @@ import React, { useState } from 'react';
 import { ArrowRight, Loader2, Lock, Mail, MapPin, Phone, ShieldCheck, User } from 'lucide-react';
 import { SiteConfig, User as UserType } from '../types';
 import { api } from '../services/api';
+import SocialAuthButtons from '../components/SocialAuthButtons';
 
 type AuthMode = 'login' | 'register' | 'otp';
 type AuthAudience = 'client' | 'admin';
 
 interface LoginProps {
-  onLoginSuccess: (token: string, user: UserType) => void;
+  onLoginSuccess: (token: string, user: UserType, redirectPath?: string) => void;
   navigateTo: (page: string) => void;
   siteConfig: SiteConfig;
   initialMode?: AuthMode;
   audience?: AuthAudience;
+  socialNextPath?: string;
 }
 
 const Login: React.FC<LoginProps> = ({
@@ -19,7 +21,8 @@ const Login: React.FC<LoginProps> = ({
   navigateTo,
   siteConfig,
   initialMode = 'login',
-  audience = 'client'
+  audience = 'client',
+  socialNextPath
 }) => {
   const supportsRegistration = audience === 'client';
   const [mode, setMode] = useState<AuthMode>(supportsRegistration ? initialMode : 'login');
@@ -112,6 +115,10 @@ const Login: React.FC<LoginProps> = ({
       : `Entrez le code OTP envoyé à ${email || 'votre email'}.`;
 
   const inputClass = 'block w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 pl-10';
+  const handleSocialProviderClick = (provider: { name: string }) => {
+    resetMessages();
+    setSuccess(`Redirection vers ${provider.name}...`);
+  };
 
   return (
     <div className="relative flex min-h-[82vh] items-center justify-center overflow-hidden">
@@ -174,6 +181,20 @@ const Login: React.FC<LoginProps> = ({
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {audience === 'client' && mode !== 'otp' && (
+              <>
+                <SocialAuthButtons onProviderClick={handleSocialProviderClick} nextPath={socialNextPath || '/'} />
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-200" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-white px-4 text-xs font-black uppercase tracking-[0.22em] text-slate-400">Or continue with email</span>
+                  </div>
+                </div>
+              </>
+            )}
+
             {mode === 'register' && (
               <>
                 <div className="grid gap-4 md:grid-cols-2">

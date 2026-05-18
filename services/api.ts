@@ -1,4 +1,4 @@
-import { Listing, Order, OrderStatus, User, UserRole, SubscriptionTier, Category, SubCategory, CartItem, SiteConfig, GuestCheckoutPayload } from '../types';
+import { Listing, Order, OrderStatus, User, UserRole, SubscriptionTier, Category, SubCategory, CartItem, SiteConfig, GuestCheckoutPayload, AuthProviderConfig, AuthProviderKey, PublicAuthProvider } from '../types';
 
 const API_URL = '/api';
 
@@ -62,6 +62,7 @@ export const api = {
   verifyRegistrationOtp: (email: string, otp: string) => fetchWithFallback<{ token: string; user: User }>(`${API_URL}/auth/register/verify-otp`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email, otp }) }),
   resendRegistrationOtp: (email: string) => fetchWithFallback<{ success: boolean; message: string }>(`${API_URL}/auth/register/resend-otp`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email }) }),
   getCurrentUser: () => fetchWithFallback<User>(`${API_URL}/auth/me`, { headers: getHeaders() }),
+  getPublicAuthProviders: () => fetchWithFallback<PublicAuthProvider[]>(`${API_URL}/auth/providers`, undefined, []),
   
   // Profile & Subscription
   updateProfile: (data: { username: string, avatarUrl?: string, password?: string, fullName?: string, address?: string, phone?: string, paymentMethod?: string, whatsappNumber?: string }) => 
@@ -99,7 +100,7 @@ export const api = {
   deleteSubCategory: (id: string) => fetchWithFallback(`${API_URL}/subcategories/${id}`, { method: 'DELETE', headers: getHeaders() }),
   
   // Listings
-  getListings: () => fetchWithFallback<Listing[]>(`${API_URL}/listings`, undefined, []),
+  getListings: () => fetchWithFallback<Listing[]>(`${API_URL}/listings`, { headers: getHeaders() }, []),
   createListing: (listing: Partial<Listing>) => fetchWithFallback(`${API_URL}/listings`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(listing) }),
   updateListing: (id: string, listing: Partial<Listing>) => fetchWithFallback(`${API_URL}/listings/${id}`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(listing) }),
   deleteListing: (id: string) => fetchWithFallback<{ success: boolean; archived?: boolean; message?: string }>(`${API_URL}/listings/${id}`, { method: 'DELETE', headers: getHeaders() }),
@@ -122,6 +123,15 @@ export const api = {
     `${API_URL}/admin/email/test`,
     { method: 'POST', headers: getHeaders(), body: JSON.stringify({ to }) }
   ),
+  getAuthProviders: () => fetchWithFallback<AuthProviderConfig[]>(`${API_URL}/admin/auth-providers`, { headers: getHeaders() }, []),
+  updateAuthProvider: (
+    providerKey: AuthProviderKey,
+    data: { enabled?: boolean; updates?: Record<string, string>; clearFields?: string[] }
+  ) => fetchWithFallback<AuthProviderConfig>(`${API_URL}/admin/auth-providers/${providerKey}`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  }),
 
   // Analytics
   getDailyStats: () => fetchWithFallback<{ dailyStats: { date: string, sales: number, orders: number }[], totalSales: number, totalOrders: number, totalUsers: number, topProducts: Listing[] }>(`${API_URL}/admin/stats`, { headers: getHeaders() }, { dailyStats: [], totalSales: 0, totalOrders: 0, totalUsers: 0, topProducts: [] }),

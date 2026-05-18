@@ -12,6 +12,9 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
+import DataDeletion from './pages/DataDeletion';
+import RegisterAuthenticationAdmin from './pages/RegisterAuthenticationAdmin';
+import AuthCallback from './pages/AuthCallback';
 import { AdminDashboard, UserDashboard } from './pages/Dashboards';
 import { User, UserRole, Listing, Order, OrderStatus, SubscriptionTier, Category, SiteConfig } from './types';
 import { api } from './services/api';
@@ -36,11 +39,14 @@ type PendingNavigation = {
 
 export type AdminNotificationItem = {
   id: string;
-  type: 'order' | 'system';
+  type: 'order' | 'user' | 'account' | 'subscription' | 'system';
   title: string;
   message: string;
   orderId?: string;
   orderNumber?: string;
+  userId?: string;
+  userEmail?: string;
+  targetTab?: 'overview' | 'orders' | 'users' | 'notification-config' | 'settings';
   createdAt: string;
   read: boolean;
 };
@@ -54,6 +60,9 @@ const resolveRouteFromPath = (pathname: string): { page: string; slug?: string }
   }
   if (pathname === '/admin/login') {
     return { page: 'admin-login' };
+  }
+  if (pathname === '/admin/register-authentication') {
+    return { page: 'admin-register-authentication' };
   }
   if (pathname === '/login') {
     return { page: 'login' };
@@ -76,11 +85,17 @@ const resolveRouteFromPath = (pathname: string): { page: string; slug?: string }
   if (pathname === '/privacy-policy') {
     return { page: 'privacy-policy' };
   }
+  if (pathname === '/data-deletion') {
+    return { page: 'data-deletion' };
+  }
   if (pathname === '/terms') {
     return { page: 'terms' };
   }
   if (pathname === '/profile') {
     return { page: 'profile' };
+  }
+  if (pathname === '/auth/callback') {
+    return { page: 'auth-callback' };
   }
   if (pathname === '/dashboard') {
     return { page: 'user-dashboard' };
@@ -100,6 +115,8 @@ const getPathForPage = (page: string, slug?: string) => {
       return '/admin';
     case 'admin-login':
       return '/admin/login';
+    case 'admin-register-authentication':
+      return '/admin/register-authentication';
     case 'login':
       return '/login';
     case 'register':
@@ -114,10 +131,14 @@ const getPathForPage = (page: string, slug?: string) => {
       return '/contact';
     case 'privacy-policy':
       return '/privacy-policy';
+    case 'data-deletion':
+      return '/data-deletion';
     case 'terms':
       return '/terms';
     case 'profile':
       return '/profile';
+    case 'auth-callback':
+      return '/auth/callback';
     case 'user-dashboard':
       return '/dashboard';
     case 'category':
@@ -174,6 +195,13 @@ const getFontFormat = (format: string) => {
   return format || 'woff2';
 };
 
+const STAFF_ROLES = new Set(['ADMIN', 'SUB_ADMIN', 'SELLER', 'AGENT']);
+
+const isStaffAccount = (role?: string) => STAFF_ROLES.has(role || '');
+
+const formatUserLabel = (target: Pick<User, 'username' | 'email' | 'fullName'>) =>
+  target.fullName?.trim() || target.username || target.email;
+
 const App: React.FC = () => {
   const initialRoute = resolveRouteFromPath(window.location.pathname);
   const [user, setUser] = useState<User>(INITIAL_GUEST);
@@ -188,8 +216,10 @@ const App: React.FC = () => {
   const [cartCount, setCartCount] = useState(0);
   const [notification, setNotification] = useState<NotificationState>({ show: false, message: '', type: 'success' });
   const notificationTimerRef = useRef<number | null>(null);
-  const knownAdminOrderIdsRef = useRef<Set<string>>(new Set());
   const adminOrdersInitializedRef = useRef(false);
+  const previousAdminOrdersRef = useRef<Map<string, Order>>(new Map());
+  const adminUsersInitializedRef = useRef(false);
+  const previousAdminUsersRef = useRef<Map<string, User>>(new Map());
   const [adminNotifications, setAdminNotifications] = useState<AdminNotificationItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('tunibots_admin_notifications') || '[]');
@@ -200,6 +230,7 @@ const App: React.FC = () => {
   const [isAdminNotificationCenterOpen, setIsAdminNotificationCenterOpen] = useState(false);
   const [blockingOrderNotification, setBlockingOrderNotification] = useState<AdminNotificationItem | null>(null);
   const [adminFocusOrderId, setAdminFocusOrderId] = useState<string | null>(null);
+  const [adminFocusTab, setAdminFocusTab] = useState<'overview' | 'orders' | 'users' | 'notification-config' | 'settings' | null>(null);
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({ logoUrl: '', siteName: 'TuniBots', logoSize: 32, heroPromoBanners: [], floatingBrandCards: [], storeSections: [] });
   const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation>(null);
   const [isAuthResolved, setIsAuthResolved] = useState(!localStorage.getItem('token'));
@@ -344,6 +375,17 @@ const App: React.FC = () => {
     localStorage.setItem('tunibots_admin_notifications', JSON.stringify(adminNotifications.slice(0, 80)));
   }, [adminNotifications]);
 
+  const pushAdminNotification = (item: AdminNotificationItem, options?: { blocking?: boolean; toastMessage?: string }) => {
+    setAdminNotifications((current) => [item, ...current].slice(0, 80));
+    setIsAdminNotificationCenterOpen(false);
+    if (options?.blocking) {
+      setBlockingOrderNotification(item);
+    }
+    if (options?.toastMessage) {
+      showNotification(options.toastMessage);
+    }
+  };
+
   const playAdminOrderSound = () => {
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -374,20 +416,20 @@ const App: React.FC = () => {
   }, [blockingOrderNotification, siteConfig.adminNotificationSound]);
 
   const pushAdminOrderNotification = (order: Order) => {
-    const item: AdminNotificationItem = {
+    pushAdminNotification({
       id: `order-${order.id}-${Date.now()}`,
       type: 'order',
       title: 'Nouvelle commande',
       message: `${order.orderNumber} - ${order.customerFirstName || ''} ${order.customerLastName || ''}`.trim(),
       orderId: order.id,
       orderNumber: order.orderNumber,
+      targetTab: 'orders',
       createdAt: new Date().toISOString(),
       read: false
-    };
-
-    setAdminNotifications((current) => [item, ...current].slice(0, 80));
-    setBlockingOrderNotification(item);
-    setIsAdminNotificationCenterOpen(false);
+    }, {
+      blocking: true,
+      toastMessage: `Nouvelle commande à traiter: ${order.orderNumber}`
+    });
   };
 
   const markAdminNotificationRead = (notificationId: string) => {
@@ -402,15 +444,32 @@ const App: React.FC = () => {
     markAdminNotificationRead(item.id);
     setBlockingOrderNotification(null);
     setIsAdminNotificationCenterOpen(false);
-    setAdminFocusOrderId(item.orderId || null);
+    if (item.orderId) {
+      setAdminFocusOrderId(item.orderId);
+      setAdminFocusTab('orders');
+    } else if (item.targetTab) {
+      setAdminFocusTab(item.targetTab);
+    }
     navigateTo('admin-dashboard');
-    showNotification(item.orderNumber ? `Commande ${item.orderNumber} ouverte dans le dashboard` : 'Dashboard commandes ouvert');
+    if (item.orderNumber) {
+      showNotification(`Commande ${item.orderNumber} ouverte dans le dashboard`);
+      return;
+    }
+    if (item.targetTab === 'users') {
+      showNotification('Centre utilisateurs ouvert dans le dashboard');
+      return;
+    }
+    if (item.targetTab === 'settings') {
+      showNotification('Paramètres clients ouverts dans le dashboard');
+      return;
+    }
+    showNotification('Notification ouverte dans le dashboard');
   };
 
   useEffect(() => {
     if (!isAdminRole(user.role)) {
       adminOrdersInitializedRef.current = false;
-      knownAdminOrderIdsRef.current = new Set();
+      previousAdminOrdersRef.current = new Map();
       return;
     }
 
@@ -418,18 +477,66 @@ const App: React.FC = () => {
     const pollOrders = async () => {
       try {
         const latestOrders = await api.getAllOrders();
-        const latestIds = new Set(latestOrders.map((order) => order.id));
-        const newOrders = latestOrders.filter((order) => !knownAdminOrderIdsRef.current.has(order.id));
+        const previousOrders = previousAdminOrdersRef.current;
+        const latestMap = new Map(latestOrders.map((order) => [order.id, order]));
+        const newOrders = latestOrders.filter((order) => !previousOrders.has(order.id));
+        const changedOrders = latestOrders.filter((order) => {
+          const previous = previousOrders.get(order.id);
+          return previous && previous.status !== order.status;
+        });
 
         if (adminOrdersInitializedRef.current && siteConfig.adminNotificationsEnabled !== false && newOrders.length > 0) {
-          const newest = newOrders[0];
-          showNotification(`Nouvelle commande à traiter: ${newest.orderNumber}`, 'success');
-          pushAdminOrderNotification(newest);
+          pushAdminOrderNotification(newOrders[0]);
           if (siteConfig.adminNotificationSound !== false) playAdminOrderSound();
         }
 
+        if (adminOrdersInitializedRef.current && siteConfig.adminNotificationsEnabled !== false) {
+          changedOrders.forEach((order) => {
+            const previous = previousOrders.get(order.id);
+            if (!previous) return;
+
+            const baseItem: AdminNotificationItem = {
+              id: `order-status-${order.id}-${order.status}-${Date.now()}`,
+              type: 'order',
+              title: 'Commande mise à jour',
+              message: `${order.orderNumber} est passée de ${previous.status} à ${order.status}.`,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              targetTab: 'orders',
+              createdAt: new Date().toISOString(),
+              read: false
+            };
+
+            if (order.status === OrderStatus.CANCELLED) {
+              pushAdminNotification({
+                ...baseItem,
+                title: 'Commande annulée',
+                message: `${order.orderNumber} a été annulée et doit être revue par l'admin.`
+              }, { toastMessage: `Commande annulée: ${order.orderNumber}` });
+              return;
+            }
+
+            if (order.status === OrderStatus.PAYMENT_RECEIVED) {
+              pushAdminNotification({
+                ...baseItem,
+                title: 'Paiement reçu',
+                message: `${order.orderNumber} est marquée comme paiement reçu et attend un suivi admin.`
+              });
+              return;
+            }
+
+            if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) {
+              pushAdminNotification({
+                ...baseItem,
+                title: 'Commande finalisée',
+                message: `${order.orderNumber} a été finalisée avec le statut ${order.status}.`
+              });
+            }
+          });
+        }
+
         adminOrdersInitializedRef.current = true;
-        knownAdminOrderIdsRef.current = latestIds;
+        previousAdminOrdersRef.current = latestMap;
         setOrders(latestOrders);
       } catch (error) {
         console.error(error);
@@ -443,6 +550,117 @@ const App: React.FC = () => {
     user.role,
     siteConfig.adminNotificationsEnabled,
     siteConfig.adminNotificationSound,
+    siteConfig.adminNotificationPollSeconds
+  ]);
+
+  useEffect(() => {
+    if (user.role !== UserRole.ADMIN) {
+      adminUsersInitializedRef.current = false;
+      previousAdminUsersRef.current = new Map();
+      return;
+    }
+
+    const pollSeconds = Math.max(5, Number(siteConfig.adminNotificationPollSeconds || 15));
+    const pollUsers = async () => {
+      try {
+        const latestUsers = await api.getAllUsers();
+        const previousUsers = previousAdminUsersRef.current;
+        const latestMap = new Map(latestUsers.map((account) => [account.id, account]));
+
+        if (adminUsersInitializedRef.current && siteConfig.adminNotificationsEnabled !== false) {
+          latestUsers
+            .filter((account) => !previousUsers.has(account.id) && !isStaffAccount(account.role))
+            .forEach((account) => {
+              pushAdminNotification({
+                id: `user-created-${account.id}-${Date.now()}`,
+                type: 'user',
+                title: 'Nouvel utilisateur créé',
+                message: `${formatUserLabel(account)} vient de créer un compte (${account.email}).`,
+                userId: account.id,
+                userEmail: account.email,
+                targetTab: 'users',
+                createdAt: new Date().toISOString(),
+                read: false
+              }, { toastMessage: `Nouvel utilisateur: ${account.username}` });
+            });
+
+          Array.from(previousUsers.values())
+            .filter((account) => !latestMap.has(account.id) && !isStaffAccount(account.role))
+            .forEach((account) => {
+              pushAdminNotification({
+                id: `user-deleted-${account.id}-${Date.now()}`,
+                type: 'account',
+                title: 'Compte supprimé',
+                message: `${formatUserLabel(account)} a supprimé son compte client.`,
+                userId: account.id,
+                userEmail: account.email,
+                targetTab: 'users',
+                createdAt: new Date().toISOString(),
+                read: false
+              }, { toastMessage: `Compte supprimé: ${account.username}` });
+            });
+
+          latestUsers.forEach((account) => {
+            const previous = previousUsers.get(account.id);
+            if (!previous || isStaffAccount(account.role)) return;
+
+            if (!previous.emailVerified && account.emailVerified) {
+              pushAdminNotification({
+                id: `user-verified-${account.id}-${Date.now()}`,
+                type: 'user',
+                title: 'Compte vérifié',
+                message: `${formatUserLabel(account)} a confirmé son compte.`,
+                userId: account.id,
+                userEmail: account.email,
+                targetTab: 'users',
+                createdAt: new Date().toISOString(),
+                read: false
+              });
+            }
+
+            if (previous.email !== account.email) {
+              pushAdminNotification({
+                id: `user-email-${account.id}-${Date.now()}`,
+                type: 'account',
+                title: 'Email client modifié',
+                message: `${formatUserLabel(account)} a changé son email en ${account.email}.`,
+                userId: account.id,
+                userEmail: account.email,
+                targetTab: 'users',
+                createdAt: new Date().toISOString(),
+                read: false
+              });
+            }
+
+            if (previous.subscriptionTier !== account.subscriptionTier) {
+              pushAdminNotification({
+                id: `user-subscription-${account.id}-${Date.now()}`,
+                type: 'subscription',
+                title: 'Abonnement mis à jour',
+                message: `${formatUserLabel(account)} est passé de ${previous.subscriptionTier} à ${account.subscriptionTier}.`,
+                userId: account.id,
+                userEmail: account.email,
+                targetTab: 'users',
+                createdAt: new Date().toISOString(),
+                read: false
+              });
+            }
+          });
+        }
+
+        adminUsersInitializedRef.current = true;
+        previousAdminUsersRef.current = latestMap;
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    pollUsers();
+    const interval = window.setInterval(pollUsers, pollSeconds * 1000);
+    return () => window.clearInterval(interval);
+  }, [
+    user.role,
+    siteConfig.adminNotificationsEnabled,
     siteConfig.adminNotificationPollSeconds
   ]);
 
@@ -474,7 +692,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLoginSuccess = (token: string, user: User) => {
+  const handleLoginSuccess = (token: string, user: User, redirectPath?: string) => {
     localStorage.setItem('token', token);
     setIsAuthResolved(true);
     setUser(user);
@@ -483,16 +701,25 @@ const App: React.FC = () => {
       navigateTo('admin-dashboard');
       return;
     }
+    if (redirectPath) {
+      setPendingNavigation(null);
+      const route = resolveRouteFromPath(new URL(redirectPath, window.location.origin).pathname);
+      navigateTo(route.page, route.slug);
+      return;
+    }
     if (pendingNavigation) {
       const nextRoute = pendingNavigation;
       setPendingNavigation(null);
       navigateTo(nextRoute.page, nextRoute.slug);
       return;
     }
-    navigateTo('home');
+    navigateTo('user-dashboard');
   };
   const handleLogout = () => {
-    const shouldReturnToAdminLogin = currentPage === 'admin-dashboard' || currentPage === 'admin-login';
+    const shouldReturnToAdminLogin =
+      currentPage === 'admin-dashboard' ||
+      currentPage === 'admin-login' ||
+      currentPage === 'admin-register-authentication';
     localStorage.removeItem('token');
     setUser(INITIAL_GUEST);
     setPendingNavigation(null);
@@ -519,7 +746,7 @@ const App: React.FC = () => {
       return;
     }
 
-    if (currentPage === 'admin-dashboard' && !isAdminRole(user.role)) {
+    if ((currentPage === 'admin-dashboard' || currentPage === 'admin-register-authentication') && !isAdminRole(user.role)) {
       navigateTo('admin-login', undefined, true);
       return;
     }
@@ -647,14 +874,15 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case 'home': return <Home listings={publicListings} categories={categories} onViewProduct={handleViewProduct} navigateTo={navigateTo} siteConfig={siteConfig} />;
-      case 'login': return <Login onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} siteConfig={siteConfig} initialMode="login" />;
-      case 'register': return <Login onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} siteConfig={siteConfig} initialMode="register" />;
+      case 'login': return <Login onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} siteConfig={siteConfig} initialMode="login" socialNextPath={pendingNavigation ? getPathForPage(pendingNavigation.page, pendingNavigation.slug) : '/dashboard'} />;
+      case 'register': return <Login onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} siteConfig={siteConfig} initialMode="register" socialNextPath={pendingNavigation ? getPathForPage(pendingNavigation.page, pendingNavigation.slug) : '/dashboard'} />;
       case 'admin-login': return <Login onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} siteConfig={siteConfig} initialMode="login" audience="admin" />;
       case 'cart': return <Cart navigateTo={navigateTo} onCartUpdate={updateCartCount} siteConfig={siteConfig} listings={publicListings} user={user} />;
       case 'subscription': return <Subscription user={user} onSubscribe={() => refreshData()} navigateTo={navigateTo} onRequireLogin={() => requireLoginFor('subscription')} />;
       case 'about': return <About siteConfig={siteConfig} navigateTo={navigateTo} />;
       case 'contact': return <Contact siteConfig={siteConfig} navigateTo={navigateTo} />;
       case 'privacy-policy': return <PrivacyPolicy siteConfig={siteConfig} />;
+      case 'data-deletion': return <DataDeletion siteConfig={siteConfig} />;
       case 'terms': return <Terms siteConfig={siteConfig} />;
       
       case 'category': {
@@ -711,12 +939,24 @@ const App: React.FC = () => {
                   siteConfig={siteConfig}
                   onUpdateSiteConfig={handleUpdateSiteConfig}
                   onResendOrderInvoiceEmail={handleResendOrderInvoiceEmail}
+                  navigateTo={navigateTo}
+                  focusTab={adminFocusTab}
+                  onFocusTabHandled={() => setAdminFocusTab(null)}
                   focusOrderId={adminFocusOrderId}
                   onFocusOrderHandled={() => setAdminFocusOrderId(null)}
                />;
+      case 'admin-register-authentication':
+        return (
+          <RegisterAuthenticationAdmin
+            navigateTo={navigateTo}
+            onNotify={showNotification}
+          />
+        );
       
       case 'user-dashboard': return <UserDashboard user={user} orders={orders} navigateTo={navigateTo} />;
       case 'profile': return <Profile user={user} onUpdateUser={setUser} onDeleteAccountSuccess={handleAccountDeleted} navigateTo={navigateTo} />;
+      case 'auth-callback':
+        return <AuthCallback onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} />;
       default: return <Home listings={publicListings} categories={categories} onViewProduct={handleViewProduct} navigateTo={navigateTo} siteConfig={siteConfig} />;
     }
   };
@@ -725,7 +965,7 @@ const App: React.FC = () => {
     return renderContent();
   }
 
-  if (currentPage === 'admin-dashboard') {
+  if (currentPage === 'admin-dashboard' || currentPage === 'admin-register-authentication') {
     return (
       <AdminLayout
         user={user}
@@ -747,7 +987,7 @@ const App: React.FC = () => {
     );
   }
 
-  if (currentPage === 'login' || currentPage === 'register') {
+  if (currentPage === 'login' || currentPage === 'register' || currentPage === 'auth-callback') {
     return renderContent();
   }
 

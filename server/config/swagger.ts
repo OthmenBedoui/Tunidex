@@ -67,6 +67,7 @@ const options = {
             stock: { type: 'integer' },
             categoryId: { type: 'string' },
             subCategoryId: { type: 'string', nullable: true },
+            source: { type: 'string', nullable: true },
             imageUrl: { type: 'string' },
             logoUrl: { type: 'string', nullable: true },
             gallery: {

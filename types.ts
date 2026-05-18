@@ -133,6 +133,7 @@ export interface Listing {
   platform?: string;
   region?: string;
   activationCountry?: string;
+  source?: string;
   activationGuideTitle?: string;
   activationGuideContent?: string;
   restrictionsTitle?: string;
@@ -232,6 +233,53 @@ export interface SiteConfig {
   click2payEnabled?: boolean;
   click2payMerchantId?: string;
   click2payApiKey?: string;
+  authProviders?: Record<string, { enabled: boolean; lastUpdatedAt?: string }>;
+}
+
+export type AuthProviderKey =
+  | 'email-password'
+  | 'google'
+  | 'facebook'
+  | 'apple'
+  | 'discord'
+  | 'github'
+  | 'microsoft';
+
+export type AuthProviderFieldKind = 'text' | 'password' | 'url' | 'textarea';
+
+export interface AuthProviderField {
+  key: string;
+  envName: string;
+  label: string;
+  description?: string;
+  value: string;
+  displayValue: string;
+  maskedValue?: string;
+  required: boolean;
+  secret: boolean;
+  multiline?: boolean;
+  kind: AuthProviderFieldKind;
+  configured: boolean;
+}
+
+export interface AuthProviderConfig {
+  key: AuthProviderKey;
+  name: string;
+  description: string;
+  supported: boolean;
+  enabled: boolean;
+  status: 'ACTIVE' | 'INACTIVE';
+  configured: boolean;
+  environmentStatus: 'CONFIGURED' | 'MISSING_CREDENTIALS';
+  lastUpdatedAt?: string;
+  fields: AuthProviderField[];
+}
+
+export interface PublicAuthProvider {
+  key: AuthProviderKey;
+  name: string;
+  description: string;
+  authUrl: string;
 }
 
 export interface CustomFont {

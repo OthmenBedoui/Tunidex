@@ -3,6 +3,12 @@ import prisma from '../prisma.js';
 
 const SITE_CONFIG_KEY = 'site';
 
+type SendEmailOptions = {
+    text?: string;
+    replyTo?: string;
+    messageType?: 'transactional' | 'generic';
+};
+
 export const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; html: string }> = {
     registrationOtp: {
         subject: 'Code de verification TuniBots',
@@ -79,6 +85,26 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; html: st
 export const renderTemplate = (template: string, variables: Record<string, string | number | null | undefined>) =>
     template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => String(variables[key] ?? ''));
 
+const ensureHtmlDocument = (html: string) => {
+    if (/<html[\s>]/i.test(html)) {
+        return html;
+    }
+
+    return [
+        '<!doctype html>',
+        '<html lang="fr">',
+        '<head>',
+        '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />',
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+        '<meta name="color-scheme" content="light only" />',
+        '<meta name="supported-color-schemes" content="light only" />',
+        '<title>TuniBots</title>',
+        '</head>',
+        `<body style="margin:0;padding:0;background:#f8fafc;">${html}</body>`,
+        '</html>'
+    ].join('');
+};
+
 const htmlToText = (html: string) =>
     html
         .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -114,6 +140,11 @@ const fallbackTransport = {
     secure: false,
     auth: { user: 'johathan.muller46@ethereal.email', pass: 'Hj7X5X1X1X1X1X1X1X' },
     from: '"TuniBots" <noreply@tunibots.tn>'
+};
+
+const extractEmailAddress = (value: string) => {
+    const match = value.match(/<([^>]+)>/);
+    return (match?.[1] || value).trim();
 };
 
 const readMailerConfig = async () => {
@@ -158,11 +189,34 @@ const createTransporter = async () => {
     });
 };
 
-export const sendEmail = async (to: string, subject: string, html: string) => {
+export const sendEmail = async (to: string, subject: string, html: string, options: SendEmailOptions = {}) => {
     try {
         const config = await readMailerConfig();
         const transporter = await createTransporter();
-        const info = await transporter.sendMail({ from: config.from, to, subject, html, text: htmlToText(html) });
+        const htmlDocument = ensureHtmlDocument(html);
+        const fromAddress = extractEmailAddress(config.from);
+        const fromDomain = fromAddress.includes('@') ? fromAddress.split('@')[1] : 'localhost';
+        const headers = options.messageType === 'transactional'
+            ? {
+                'X-Auto-Response-Suppress': 'All',
+                'Auto-Submitted': 'auto-generated'
+            }
+            : undefined;
+        const info = await transporter.sendMail({
+            from: config.from,
+            to,
+            subject,
+            html: htmlDocument,
+            text: options.text || htmlToText(htmlDocument),
+            replyTo: options.replyTo || fromAddress,
+            envelope: {
+                from: fromAddress,
+                to
+            },
+            headers,
+            date: new Date(),
+            messageId: `<${Date.now()}.${Math.random().toString(36).slice(2)}@${fromDomain}>`
+        });
         console.log('[email] sent', {
             to,
             subject,

@@ -120,6 +120,7 @@ model Listing {
   game              String?
   platform          String?
   region            String?
+  source            String?
   activationCountry String?
   activationGuideTitle String?
   activationGuideContent String?

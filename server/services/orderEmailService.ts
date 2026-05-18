@@ -45,6 +45,8 @@ const formatPaymentMethod = (method?: string | null) => {
   return method ? labels[method.toLowerCase()] || method : 'A confirmer';
 };
 
+const formatOrderDate = (value?: Date | null) => value ? new Date(value).toLocaleDateString('fr-FR') : '';
+
 const buildItemsRows = (order: CheckoutOrderEmailPayload) =>
   order.items
     .map(
@@ -62,68 +64,140 @@ const buildItemsRows = (order: CheckoutOrderEmailPayload) =>
     )
     .join('');
 
+const buildItemsText = (order: CheckoutOrderEmailPayload) =>
+  order.items
+    .map((item) => `- ${item.titleSnapshot} x${item.quantity}: ${formatMoney(item.priceSnapshot * item.quantity, order.currency)}`)
+    .join('\n');
+
 const buildOrderConfirmationEmail = (order: CheckoutOrderEmailPayload) => {
   const customerName = `${order.customerFirstName} ${order.customerLastName}`.trim();
-  const invoiceBlock = order.invoice
-    ? `
-      <div style="margin-top:16px;padding:16px;border:1px solid #cbd5e1;border-radius:16px;background:#f8fafc;">
-        <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#475569;">Facture TuniBots</div>
-        <div style="font-size:20px;font-weight:800;color:#0f172a;margin-top:6px;">${escapeHtml(order.invoice.invoiceNumber)}</div>
-        <div style="font-size:14px;color:#475569;margin-top:6px;">Date: ${new Date(order.invoice.issueDate).toLocaleDateString('fr-FR')}</div>
-        <div style="font-size:14px;color:#475569;">Statut: En cours</div>
-      </div>
-    `
-    : '';
+  const invoiceNumber = order.invoice?.invoiceNumber || 'En attente';
+  const invoiceDate = formatOrderDate(order.invoice?.issueDate);
+  const paymentMethod = formatPaymentMethod(order.paymentMethod);
 
   return `
-    <div style="background:#f8fafc;padding:32px 16px;font-family:Arial,sans-serif;color:#0f172a;">
-      <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:24px;padding:32px;border:1px solid #e2e8f0;">
-        <div style="font-size:26px;font-weight:900;color:#0f172a;margin-bottom:10px;">TuniBots</div>
-        <div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#e0e7ff;color:#4338ca;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Facture de commande</div>
-        <h1 style="margin:18px 0 12px;font-size:28px;line-height:1.2;">Votre commande est en cours</h1>
-        <p style="margin:0 0 18px;color:#475569;font-size:15px;">Bonjour ${escapeHtml(customerName || order.customerFirstName)}, votre facture TuniBots est générée. Un de nos services support vous guidera dans votre commande et les prochaines étapes.</p>
-
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:24px 0;">
-          <div style="padding:16px;border:1px solid #cbd5e1;border-radius:16px;background:#f8fafc;">
-            <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#475569;">Numéro de commande</div>
-            <div style="font-size:20px;font-weight:800;color:#0f172a;margin-top:6px;">${escapeHtml(order.orderNumber)}</div>
-          </div>
-          <div style="padding:16px;border:1px solid #cbd5e1;border-radius:16px;background:#f8fafc;">
-            <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#475569;">Montant total</div>
-            <div style="font-size:20px;font-weight:800;color:#0f172a;margin-top:6px;">${formatMoney(order.amount, order.currency)}</div>
-          </div>
-        </div>
-
-        ${invoiceBlock}
-
-        <div style="margin-top:16px;padding:16px;border:1px solid #cbd5e1;border-radius:16px;background:#f8fafc;">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#475569;margin-bottom:10px;">Coordonnées client</div>
-          <div style="font-size:14px;color:#0f172a;line-height:1.7;">
-            <div><strong>Nom:</strong> ${escapeHtml(customerName || order.customerFirstName)}</div>
-            <div><strong>Email:</strong> ${escapeHtml(order.customerEmail)}</div>
-            <div><strong>Téléphone:</strong> ${escapeHtml(order.customerPhone)}</div>
-            <div><strong>Méthode de paiement choisie:</strong> ${escapeHtml(formatPaymentMethod(order.paymentMethod))}</div>
-          </div>
-        </div>
-
-        <div style="margin-top:24px;">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#475569;margin-bottom:12px;">Récapitulatif</div>
-          <table style="width:100%;border-collapse:collapse;">
-            <tbody>
+    <div style="margin:0;padding:24px 12px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;">
+        <tr>
+          <td style="padding:28px 28px 20px 28px;border-bottom:1px solid #e2e8f0;">
+            <div style="font-size:24px;font-weight:700;color:#0f172a;">TuniBots</div>
+            <div style="font-size:12px;color:#475569;margin-top:4px;">Facture de commande</div>
+            <h1 style="margin:16px 0 8px 0;font-size:24px;line-height:1.3;color:#0f172a;">Confirmation de votre commande</h1>
+            <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">Bonjour ${escapeHtml(customerName || order.customerFirstName)}, votre facture a bien ete generee. Conservez cet email pour le suivi de votre commande.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+              <tr>
+                <td width="50%" valign="top" style="padding:0 10px 14px 0;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;">
+                    <tr><td style="padding:14px;">
+                      <div style="font-size:12px;color:#64748b;text-transform:uppercase;">Commande</div>
+                      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-top:6px;">${escapeHtml(order.orderNumber)}</div>
+                    </td></tr>
+                  </table>
+                </td>
+                <td width="50%" valign="top" style="padding:0 0 14px 10px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;">
+                    <tr><td style="padding:14px;">
+                      <div style="font-size:12px;color:#64748b;text-transform:uppercase;">Montant total</div>
+                      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-top:6px;">${formatMoney(order.amount, order.currency)}</div>
+                    </td></tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td width="50%" valign="top" style="padding:0 10px 0 0;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;">
+                    <tr><td style="padding:14px;">
+                      <div style="font-size:12px;color:#64748b;text-transform:uppercase;">Facture</div>
+                      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-top:6px;">${escapeHtml(invoiceNumber)}</div>
+                      <div style="font-size:13px;color:#475569;margin-top:6px;">Date: ${escapeHtml(invoiceDate || 'A confirmer')}</div>
+                    </td></tr>
+                  </table>
+                </td>
+                <td width="50%" valign="top" style="padding:0 0 0 10px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;">
+                    <tr><td style="padding:14px;">
+                      <div style="font-size:12px;color:#64748b;text-transform:uppercase;">Paiement</div>
+                      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-top:6px;">${escapeHtml(paymentMethod)}</div>
+                      <div style="font-size:13px;color:#475569;margin-top:6px;">Statut: En cours</div>
+                    </td></tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 28px 20px 28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e2e8f0;border-radius:12px;border-collapse:collapse;">
+              <tr>
+                <td colspan="2" style="padding:14px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:13px;font-weight:700;color:#334155;">Coordonnees client</td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;font-size:14px;color:#475569;">Nom</td>
+                <td style="padding:12px 16px;font-size:14px;color:#0f172a;">${escapeHtml(customerName || order.customerFirstName)}</td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;font-size:14px;color:#475569;border-top:1px solid #e2e8f0;">Email</td>
+                <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${escapeHtml(order.customerEmail)}</td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;font-size:14px;color:#475569;border-top:1px solid #e2e8f0;">Telephone</td>
+                <td style="padding:12px 16px;font-size:14px;color:#0f172a;border-top:1px solid #e2e8f0;">${escapeHtml(order.customerPhone)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 28px 20px 28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e2e8f0;border-radius:12px;border-collapse:collapse;">
+              <tr>
+                <td colspan="2" style="padding:14px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:13px;font-weight:700;color:#334155;">Produits</td>
+              </tr>
               ${buildItemsRows(order)}
-            </tbody>
-          </table>
-        </div>
-
-        <div style="margin-top:24px;padding:18px;border-radius:18px;background:#fff7ed;border:1px solid #fdba74;">
-          <div style="font-weight:700;color:#9a3412;margin-bottom:8px;">Accompagnement support</div>
-          <div style="font-size:14px;color:#7c2d12;">Votre facture a été générée. Un membre de notre support TuniBots vous guidera dans votre commande au ${escapeHtml(order.customerPhone)}.</div>
-        </div>
-
-        <p style="margin:24px 0 0;color:#64748b;font-size:13px;">Conservez ce message et votre numéro de commande pour le suivi.</p>
-      </div>
+              <tr>
+                <td style="padding:14px 16px;font-size:14px;font-weight:700;color:#0f172a;border-top:1px solid #e2e8f0;">Total</td>
+                <td style="padding:14px 16px;font-size:14px;font-weight:700;color:#0f172a;text-align:right;border-top:1px solid #e2e8f0;">${formatMoney(order.amount, order.currency)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 28px 28px 28px;">
+            <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">Cet email est un message transactionnel envoye automatiquement apres validation de votre commande. Si vous avez besoin d'aide, repondez simplement a cet email.</p>
+          </td>
+        </tr>
+      </table>
     </div>
   `;
+};
+
+const buildOrderConfirmationText = (order: CheckoutOrderEmailPayload) => {
+  const customerName = `${order.customerFirstName} ${order.customerLastName}`.trim() || order.customerFirstName;
+  const invoiceNumber = order.invoice?.invoiceNumber || 'En attente';
+  const invoiceDate = formatOrderDate(order.invoice?.issueDate) || 'A confirmer';
+
+  return [
+    `Bonjour ${customerName},`,
+    '',
+    'Votre facture TuniBots a ete generee.',
+    `Commande: ${order.orderNumber}`,
+    `Facture: ${invoiceNumber}`,
+    `Date: ${invoiceDate}`,
+    `Montant total: ${formatMoney(order.amount, order.currency)}`,
+    `Paiement: ${formatPaymentMethod(order.paymentMethod)}`,
+    '',
+    'Produits:',
+    buildItemsText(order),
+    '',
+    `Email client: ${order.customerEmail}`,
+    `Telephone client: ${order.customerPhone}`,
+    '',
+    'Conservez cet email pour le suivi de votre commande.'
+  ].join('\n');
 };
 
 const buildOrderTemplateVariables = (order: CheckoutOrderEmailPayload) => {
@@ -147,10 +221,15 @@ export const sendOrderConfirmationEmail = async (order: CheckoutOrderEmailPayloa
   try {
     const template = await getEmailTemplate('orderInvoice');
     const variables = buildOrderTemplateVariables(order);
+    const html = buildOrderConfirmationEmail(order);
     await sendEmail(
       order.customerEmail,
       renderTemplate(template.subject, variables),
-      renderTemplate(template.html || buildOrderConfirmationEmail(order), variables)
+      html,
+      {
+        text: buildOrderConfirmationText(order),
+        messageType: 'transactional'
+      }
     );
 
     const now = new Date();

@@ -26,6 +26,9 @@ interface AdminDashboardProps {
   siteConfig: SiteConfig;
   onUpdateSiteConfig: (config: Partial<SiteConfig>) => void;
   onResendOrderInvoiceEmail: (orderId: string) => Promise<void>;
+  navigateTo: (page: string, slug?: string) => void;
+  focusTab?: 'overview' | 'orders' | 'users' | 'notification-config' | 'settings' | null;
+  onFocusTabHandled?: () => void;
   focusOrderId?: string | null;
   onFocusOrderHandled?: () => void;
 }
@@ -440,7 +443,7 @@ const getListingStateClasses = (listing: Listing) => {
   return 'bg-red-100 text-red-700';
 };
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings, categories, onUpdateStatus, onCreateListing, onUpdateListing, onDeleteListing, onRefreshCategories, user, siteConfig, onUpdateSiteConfig, onResendOrderInvoiceEmail, focusOrderId, onFocusOrderHandled }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings, categories, onUpdateStatus, onCreateListing, onUpdateListing, onDeleteListing, onRefreshCategories, user, siteConfig, onUpdateSiteConfig, onResendOrderInvoiceEmail, navigateTo, focusTab, onFocusTabHandled, focusOrderId, onFocusOrderHandled }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'listings' | 'create' | 'users' | 'categories' | 'settings' | 'customization' | 'store-config' | 'email-config' | 'notification-config' | 'seo' | 'data'>('overview');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<{name: string, sales: number, orders: number}[]>([]);
@@ -506,6 +509,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [newListingPlatform, setNewListingPlatform] = useState('');
   const [newListingRegion, setNewListingRegion] = useState('Global');
   const [newListingActivationCountry, setNewListingActivationCountry] = useState('Tunisia');
+  const [newListingSource, setNewListingSource] = useState('');
   const [newListingActivationGuideTitle, setNewListingActivationGuideTitle] = useState('Activation Guide');
   const [newListingActivationGuideContent, setNewListingActivationGuideContent] = useState('');
   const [newListingRestrictionsTitle, setNewListingRestrictionsTitle] = useState('Check Restrictions');
@@ -1025,6 +1029,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
       return next.sort((a, b) => (a.order || 0) - (b.order || 0));
     });
   };
+
+  useEffect(() => {
+    if (!focusTab) return;
+    setActiveTab(focusTab);
+    onFocusTabHandled?.();
+  }, [focusTab, onFocusTabHandled]);
 
   useEffect(() => {
     if (!focusOrderId) return;
@@ -1554,6 +1564,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     setNewListingPlatform('');
     setNewListingRegion('Global');
     setNewListingActivationCountry('Tunisia');
+    setNewListingSource('');
     setNewListingActivationGuideTitle('Activation Guide');
     setNewListingActivationGuideContent('');
     setNewListingRestrictionsTitle('Check Restrictions');
@@ -1603,6 +1614,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     setNewListingPlatform(listing.platform || '');
     setNewListingRegion(listing.region || 'Global');
     setNewListingActivationCountry(listing.activationCountry || 'Tunisia');
+    setNewListingSource(listing.source || '');
     setNewListingActivationGuideTitle(listing.activationGuideTitle || 'Activation Guide');
     setNewListingActivationGuideContent(listing.activationGuideContent || '');
     setNewListingRestrictionsTitle(listing.restrictionsTitle || 'Check Restrictions');
@@ -1729,6 +1741,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         preparationTime: newListingIsInstant ? 'Immédiat' : newListingPrepTime,
         platform: newListingPlatform,
         region: newListingRegion,
+        source: user.role === UserRole.ADMIN ? newListingSource.trim() || undefined : undefined,
         activationCountry: newListingActivationCountry,
         activationGuideTitle: newListingActivationGuideTitle,
         activationGuideContent: sanitizeRichText(newListingActivationGuideContent),
@@ -1901,6 +1914,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
               <button onClick={() => setActiveTab('customization')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'customization' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Images size={18} /> <span>Customisation</span></button>
               <button onClick={() => setActiveTab('store-config')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'store-config' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Store size={18} /> <span>Store config</span></button>
               <button onClick={() => setActiveTab('email-config')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'email-config' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Mail size={18} /> <span>Email config</span></button>
+              <button onClick={() => navigateTo('admin-register-authentication')} className="w-full flex items-center space-x-3 px-3 py-2 rounded-md text-slate-600 hover:bg-slate-50"><LucideIcons.ShieldCheck size={18} /> <span>Register & Auth</span></button>
               <button onClick={() => setActiveTab('notification-config')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'notification-config' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.BellRing size={18} /> <span>Notifications</span></button>
               <button onClick={() => setActiveTab('seo')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'seo' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.SearchCheck size={18} /> <span>SEO</span></button>
               <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'settings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Settings size={18} /> <span>Paramètres</span></button>
@@ -4202,6 +4216,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                 <input type="text" className="w-full border rounded p-2" value={newListingTitle} onChange={e => setNewListingTitle(e.target.value)} required />
               </div>
 
+              {user.role === UserRole.ADMIN && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Source</label>
+                  <input
+                    type="url"
+                    className="w-full border rounded p-2"
+                    value={newListingSource}
+                    onChange={e => setNewListingSource(e.target.value)}
+                    placeholder="https://..."
+                  />
+                  <p className="mt-1 text-xs text-slate-500">Optionnel. Lien vers la page source du produit pour l’achat.</p>
+                </div>
+              )}
+
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center">
                       <Package size={16} className="mr-2 text-indigo-600" /> Format de Vente
@@ -5086,6 +5114,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                              <tr>
                                  <th className="px-6 py-3">Produit</th>
                                  <th className="px-6 py-3">Catégorie</th>
+                                 {user.role === UserRole.ADMIN && <th className="px-6 py-3">Source</th>}
                                  <th className="px-6 py-3">Prix</th>
                                  <th className="px-6 py-3">Stock</th>
                                  <th className="px-6 py-3">Type</th>
@@ -5112,6 +5141,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                      <td className="px-6 py-4 text-xs text-slate-600">
                                          {categories.find(c => c.id === l.categoryId)?.name || 'Inconnu'}
                                      </td>
+                                     {user.role === UserRole.ADMIN && (
+                                       <td className="px-6 py-4 text-xs text-slate-600">
+                                         {l.source ? (
+                                           <a href={l.source} target="_blank" rel="noreferrer" className="font-semibold text-indigo-600 hover:underline">
+                                             Ouvrir
+                                           </a>
+                                         ) : (
+                                           <span className="text-slate-400">Aucune</span>
+                                         )}
+                                       </td>
+                                     )}
                                      <td className="px-6 py-4 font-bold text-slate-900 text-sm">
                                          {hasListingDiscount(l) && <div className="text-[10px] font-medium text-slate-400 line-through">{l.price.toFixed(2)} TND</div>}
                                          <div>{getListingFinalPrice(l).toFixed(2)} TND</div>

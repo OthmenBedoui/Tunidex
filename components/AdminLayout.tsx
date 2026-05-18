@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Bell, CheckCircle2, ClipboardList, LayoutDashboard, LogOut, Moon, Shield, Store, Sun, X } from 'lucide-react';
+import { AlertCircle, Bell, CheckCircle2, ClipboardList, LayoutDashboard, LogOut, Moon, Shield, Store, Sun, UserPlus, UserRoundX, WalletCards, Settings2, X } from 'lucide-react';
 import { SiteConfig, User } from '../types';
 import type { AdminNotificationItem } from '../App';
 import { useThemeMode } from '../utils/themeMode';
@@ -39,6 +39,41 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
 }) => {
   const { themeMode, toggleThemeMode } = useThemeMode();
   const unreadCount = adminNotifications.filter((item) => !item.read).length;
+  const getNotificationAppearance = (item: AdminNotificationItem) => {
+    if (item.type === 'user') {
+      return {
+        icon: UserPlus,
+        unreadIconClass: 'bg-emerald-100 text-emerald-700',
+        readIconClass: 'bg-emerald-50 text-emerald-500'
+      };
+    }
+    if (item.type === 'account') {
+      return {
+        icon: UserRoundX,
+        unreadIconClass: 'bg-rose-100 text-rose-700',
+        readIconClass: 'bg-rose-50 text-rose-500'
+      };
+    }
+    if (item.type === 'subscription') {
+      return {
+        icon: WalletCards,
+        unreadIconClass: 'bg-cyan-100 text-cyan-700',
+        readIconClass: 'bg-cyan-50 text-cyan-500'
+      };
+    }
+    if (item.type === 'system') {
+      return {
+        icon: Settings2,
+        unreadIconClass: 'bg-violet-100 text-violet-700',
+        readIconClass: 'bg-violet-50 text-violet-500'
+      };
+    }
+    return {
+      icon: Bell,
+      unreadIconClass: 'bg-amber-100 text-amber-700',
+      readIconClass: 'bg-slate-100 text-slate-500'
+    };
+  };
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -165,21 +200,27 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
                         onClick={() => onOpenAdminNotification?.(item)}
                         className={`w-full rounded-xl p-3 text-left transition hover:bg-slate-50 ${item.read ? 'bg-white' : 'bg-amber-50'}`}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${item.read ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>
-                            <Bell size={17} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="truncate text-sm font-black text-slate-900">{item.title}</div>
-                              {!item.read && <span className="h-2 w-2 rounded-full bg-amber-500" />}
+                        {(() => {
+                          const appearance = getNotificationAppearance(item);
+                          const Icon = appearance.icon;
+                          return (
+                            <div className="flex items-start gap-3">
+                              <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${item.read ? appearance.readIconClass : appearance.unreadIconClass}`}>
+                                <Icon size={17} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="truncate text-sm font-black text-slate-900">{item.title}</div>
+                                  {!item.read && <span className="h-2 w-2 rounded-full bg-amber-500" />}
+                                </div>
+                                <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.message}</div>
+                                <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                  {new Date(item.createdAt).toLocaleString('fr-FR')}
+                                </div>
+                              </div>
                             </div>
-                            <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.message}</div>
-                            <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                              {new Date(item.createdAt).toLocaleString('fr-FR')}
-                            </div>
-                          </div>
-                        </div>
+                          );
+                        })()}
                       </button>
                     ))}
                   </div>

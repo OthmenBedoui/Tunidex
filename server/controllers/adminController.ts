@@ -73,6 +73,7 @@ type SiteConfigData = {
     click2payEnabled: boolean;
     click2payMerchantId: string;
     click2payApiKey: string;
+    authProviders?: Record<string, { enabled: boolean; lastUpdatedAt?: string }>;
 };
 
 const defaultSiteConfig: SiteConfigData = {
@@ -147,7 +148,8 @@ const defaultSiteConfig: SiteConfigData = {
     messengerNotificationWebhookUrl: '',
     click2payEnabled: false,
     click2payMerchantId: '',
-    click2payApiKey: ''
+    click2payApiKey: '',
+    authProviders: {}
 };
 
 const asInputJson = (value: SiteConfigData): Prisma.InputJsonValue => {
@@ -180,7 +182,7 @@ const estimateBase64Size = (value: unknown) => {
     return Math.floor((base64.length * 3) / 4);
 };
 
-const readSiteConfig = async () => {
+export const readSiteConfig = async () => {
     const record = await prisma.siteConfig.findUnique({ where: { key: SITE_CONFIG_KEY } });
 
     if (record) {
@@ -198,7 +200,7 @@ const readSiteConfig = async () => {
     return mergeSiteConfig(created.data);
 };
 
-const writeSiteConfig = async (config: SiteConfigData) => {
+export const writeSiteConfig = async (config: SiteConfigData) => {
     await prisma.siteConfig.upsert({
         where: { key: SITE_CONFIG_KEY },
         create: {
@@ -584,6 +586,7 @@ export const exportSiteData = async (_req: Request, res: Response) => {
         { header: 'subCategoryId', key: 'subCategoryId' },
         { header: 'subCategorySlug', key: 'subCategorySlug' },
         { header: 'game', key: 'game' },
+        { header: 'source', key: 'source' },
         { header: 'imageUrl', key: 'imageUrl' },
         { header: 'logoUrl', key: 'logoUrl' },
         { header: 'gallery', key: 'gallery' },
@@ -717,6 +720,7 @@ export const importSiteData = async (req: Request, res: Response) => {
             categoryId: category.id,
             subCategoryId: subCategory?.id || null,
             game: row.game || null,
+            source: row.source || null,
             imageUrl: row.imageUrl || '',
             logoUrl: row.logoUrl || null,
             gallery: row.gallery || '[]',

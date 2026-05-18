@@ -2,14 +2,12 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-tunibots}
-      POSTGRES_USER: ${POSTGRES_USER:-tunibots}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tunibots_password}
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tunibots} -d ${POSTGRES_DB:-tunibots}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,18 +20,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./.env:/app/.env
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-tunibots}:${POSTGRES_PASSWORD:-tunibots_password}@db:5432/${POSTGRES_DB:-tunibots}
-      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
-      API_KEY: ${API_KEY:-}
-      WHATSAPP_BOT_WEBHOOK_URL: ${WHATSAPP_BOT_WEBHOOK_URL:-}
-      WHATSAPP_BOT_WEBHOOK_TOKEN: ${WHATSAPP_BOT_WEBHOOK_TOKEN:-}
-      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@tunibots.com}
-      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
-      DEFAULT_AGENT_EMAIL: ${DEFAULT_AGENT_EMAIL:-agent@tunibots.com}
-      DEFAULT_AGENT_PASSWORD: ${DEFAULT_AGENT_PASSWORD:-}
     ports:
       - "${APP_PORT:-3000}:3000"
 
