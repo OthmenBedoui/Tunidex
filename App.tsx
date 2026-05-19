@@ -17,7 +17,7 @@ import DataDeletion from './pages/DataDeletion';
 import RegisterAuthenticationAdmin from './pages/RegisterAuthenticationAdmin';
 import AuthCallback from './pages/AuthCallback';
 import { AdminDashboard, UserDashboard } from './pages/Dashboards';
-import { User, UserRole, Listing, Order, OrderStatus, SubscriptionTier, Category, SiteConfig } from './types';
+import { User, UserRole, Listing, Order, OrderStatus, SubscriptionTier, Category, SiteConfig, ClientNotification } from './types';
 import { api } from './services/api';
 import * as LucideIcons from 'lucide-react';
 import { addGuestCartItem, getGuestCartCount } from './utils/guestCart';
@@ -226,6 +226,8 @@ const App: React.FC = () => {
   const previousAdminOrdersRef = useRef<Map<string, Order>>(new Map());
   const adminUsersInitializedRef = useRef(false);
   const previousAdminUsersRef = useRef<Map<string, User>>(new Map());
+  const clientNotificationsInitializedRef = useRef(false);
+  const previousClientNotificationsRef = useRef<Map<string, ClientNotification>>(new Map());
   const [adminNotifications, setAdminNotifications] = useState<AdminNotificationItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('tunibots_admin_notifications') || '[]');
@@ -235,6 +237,7 @@ const App: React.FC = () => {
   });
   const [isAdminNotificationCenterOpen, setIsAdminNotificationCenterOpen] = useState(false);
   const [blockingOrderNotification, setBlockingOrderNotification] = useState<AdminNotificationItem | null>(null);
+  const [clientNotifications, setClientNotifications] = useState<ClientNotification[]>([]);
   const [adminFocusOrderId, setAdminFocusOrderId] = useState<string | null>(null);
   const [adminFocusTab, setAdminFocusTab] = useState<'overview' | 'orders' | 'users' | 'notification-config' | 'settings' | null>(null);
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({ logoUrl: '', siteName: 'TuniBots', logoSize: 32, heroPromoBanners: [], floatingBrandCards: [], storeSections: [] });
@@ -670,6 +673,60 @@ const App: React.FC = () => {
     siteConfig.adminNotificationPollSeconds
   ]);
 
+  useEffect(() => {
+    if (user.id === 'guest' || isAdminRole(user.role)) {
+      clientNotificationsInitializedRef.current = false;
+      previousClientNotificationsRef.current = new Map();
+      setClientNotifications([]);
+      return;
+    }
+
+    const pollNotifications = async () => {
+      try {
+        const latestNotifications = await api.getMyNotifications();
+        const previousNotifications = previousClientNotificationsRef.current;
+        const latestMap = new Map(latestNotifications.map((notification) => [notification.id, notification]));
+
+        if (clientNotificationsInitializedRef.current) {
+          const unreadIncoming = latestNotifications.filter((notification) => {
+            const previous = previousNotifications.get(notification.id);
+            return !notification.read && (!previous || previous.read);
+          });
+
+          if (unreadIncoming.length > 0) {
+            showNotification(unreadIncoming[0].title);
+          }
+        }
+
+        clientNotificationsInitializedRef.current = true;
+        previousClientNotificationsRef.current = latestMap;
+        setClientNotifications(latestNotifications);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    pollNotifications();
+    const interval = window.setInterval(pollNotifications, 15000);
+    return () => window.clearInterval(interval);
+  }, [user.id, user.role]);
+
+  useEffect(() => {
+    if (user.id === 'guest' || isAdminRole(user.role)) return;
+
+    const pollMyOrders = async () => {
+      try {
+        const latestOrders = await api.getMyOrders();
+        setOrders(latestOrders);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    const interval = window.setInterval(pollMyOrders, 15000);
+    return () => window.clearInterval(interval);
+  }, [user.id, user.role]);
+
   const navigateTo = (page: string, slug?: string, replace = false) => {
     setCurrentPage(page);
     setCurrentSlug(slug || '');
@@ -728,6 +785,7 @@ const App: React.FC = () => {
       currentPage === 'admin-register-authentication';
     localStorage.removeItem('token');
     setUser(INITIAL_GUEST);
+    setClientNotifications([]);
     setPendingNavigation(null);
     navigateTo(shouldReturnToAdminLogin ? 'admin-login' : 'home');
   };
@@ -736,6 +794,7 @@ const App: React.FC = () => {
     localStorage.removeItem('token');
     setUser(INITIAL_GUEST);
     setOrders([]);
+    setClientNotifications([]);
     setCartCount(getGuestCartCount());
     setPendingNavigation(null);
     navigateTo('home');
@@ -908,6 +967,30 @@ const App: React.FC = () => {
     }
   };
 
+  const handleMarkClientNotificationRead = async (notificationId: string) => {
+    try {
+      const updated = await api.markNotificationRead(notificationId);
+      setClientNotifications((current) => current.map((item) => item.id === notificationId ? updated : item));
+      previousClientNotificationsRef.current.set(notificationId, updated);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleMarkAllClientNotificationsRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      const now = new Date().toISOString();
+      setClientNotifications((current) => {
+        const next = current.map((item) => ({ ...item, read: true, readAt: item.readAt || now }));
+        previousClientNotificationsRef.current = new Map(next.map((item) => [item.id, item]));
+        return next;
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const renderContent = () => {
     switch (currentPage) {
       case 'home': return <Home listings={publicListings} categories={categories} onViewProduct={handleViewProduct} navigateTo={navigateTo} siteConfig={siteConfig} />;
@@ -992,7 +1075,16 @@ const App: React.FC = () => {
           />
         );
       
-      case 'user-dashboard': return <UserDashboard user={user} orders={orders} navigateTo={navigateTo} />;
+      case 'user-dashboard': return (
+        <UserDashboard
+          user={user}
+          orders={orders}
+          notifications={clientNotifications}
+          navigateTo={navigateTo}
+          onMarkNotificationRead={handleMarkClientNotificationRead}
+          onMarkAllNotificationsRead={handleMarkAllClientNotificationsRead}
+        />
+      );
       case 'profile': return <Profile user={user} onUpdateUser={setUser} onDeleteAccountSuccess={handleAccountDeleted} navigateTo={navigateTo} />;
       case 'auth-callback':
         return <AuthCallback onLoginSuccess={handleLoginSuccess} navigateTo={navigateTo} />;

@@ -1,6 +1,6 @@
 
 import express from 'express';
-import { getCart, addToCart, removeFromCart, checkout, guestCheckout, getMyOrders, confirmCheckout, trackOrder, getOrderDelivery } from '../controllers/cartController.js';
+import { getCart, addToCart, removeFromCart, checkout, guestCheckout, getMyOrders, getMyNotifications, markAllMyNotificationsRead, markMyNotificationRead, confirmCheckout, trackOrder, getOrderDelivery } from '../controllers/cartController.js';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -15,5 +15,8 @@ router.post('/cart', authenticate, addToCart);
 router.delete('/cart/:itemId', authenticate, removeFromCart);
 router.post('/checkout', authenticate, checkout);
 router.get('/orders/my', authenticate, getMyOrders);
+router.get('/users/me/notifications', authenticate, getMyNotifications);
+router.post('/users/me/notifications/read-all', authenticate, markAllMyNotificationsRead);
+router.patch('/users/me/notifications/:notificationId/read', authenticate, markMyNotificationRead);
 
 export default router;

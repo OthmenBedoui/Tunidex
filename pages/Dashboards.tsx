@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Package, TrendingUp, DollarSign, Plus, Loader2, Zap, Crown, Users, Shield, FolderTree, Trash2, Edit, LayoutGrid, Save, X, Settings, User as UserIcon, Clock, History } from 'lucide-react';
-import { User, Order, OrderStatus, Listing, UserRole, Category, SubCategory, ProductType, LoginCredential, SiteConfig, HeroSlide, HeroPromoBanner, FloatingBrandCard, DiscountType, ProductVariant, StoreSectionConfig, CustomFont } from '../types';
+import { User, Order, OrderStatus, Listing, UserRole, Category, SubCategory, ProductType, LoginCredential, SiteConfig, HeroSlide, HeroPromoBanner, FloatingBrandCard, DiscountType, ProductVariant, StoreSectionConfig, CustomFont, ClientNotification } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { generateListingDescription } from '../services/geminiService';
 import { api, SeoAnalytics } from '../services/api';
@@ -9,6 +9,7 @@ import * as LucideIcons from 'lucide-react';
 import { ImageInput } from '../components/ImageInput';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { ListingImage } from '../components/ListingImage';
+import { AdminEmptyState, AdminPanelCard, AdminStickyActionBar, AdminWorkspace } from '../components/AdminWorkspace';
 import { getListingDiscountLabel, getListingFinalPrice, getPackageOriginalTotal, getPackageSavings, hasListingDiscount } from '../utils/pricing';
 import { richTextToPlainText, sanitizeRichText } from '../utils/richText';
 import { getMergedStoreSections, STORE_SECTION_DEFINITIONS } from '../utils/storeSections';
@@ -33,6 +34,19 @@ interface AdminDashboardProps {
   focusOrderId?: string | null;
   onFocusOrderHandled?: () => void;
 }
+
+type AdminTab = 'overview' | 'orders' | 'listings' | 'create' | 'users' | 'categories' | 'settings' | 'customization' | 'store-config' | 'email-config' | 'notification-config' | 'seo' | 'data';
+
+type AdminNavItem = {
+  key: AdminTab | 'admin-register-authentication';
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: string | number; className?: string }>;
+  adminOnly?: boolean;
+  sellerHidden?: boolean;
+  isRoute?: boolean;
+  isAccent?: boolean;
+};
 
 const isImageIconValue = (value?: string) => {
   const normalized = value?.trim() || '';
@@ -498,6 +512,106 @@ const getOrderStatusClasses = (status: OrderStatus) => {
   return 'bg-amber-100 text-amber-700';
 };
 
+const ADMIN_TAB_META: Record<AdminTab, { eyebrow: string; title: string; description: string }> = {
+  overview: {
+    eyebrow: 'Pilotage',
+    title: 'Dashboard admin',
+    description: 'Vue synthétique des ventes, de la traction et des zones qui méritent une action rapide.'
+  },
+  orders: {
+    eyebrow: 'Commandes',
+    title: 'Centre de traitement des commandes',
+    description: 'Priorise les paiements, les livraisons et les relances clients sans quitter la même surface.'
+  },
+  listings: {
+    eyebrow: 'Catalogue',
+    title: 'Inventaire produits',
+    description: 'Gère les offres, les packs et la disponibilité du catalogue depuis une table claire et rapide.'
+  },
+  create: {
+    eyebrow: 'Edition',
+    title: 'Ajouter ou modifier un produit',
+    description: 'Tous les champs essentiels, les aperçus et les actions critiques restent accessibles pendant toute l’édition.'
+  },
+  users: {
+    eyebrow: 'Clients & staff',
+    title: 'Utilisateurs',
+    description: 'Consulte les comptes, ajuste les rôles et garde un pilotage simple pour l’équipe support.'
+  },
+  categories: {
+    eyebrow: 'Structure catalogue',
+    title: 'Catégories et sous-catégories',
+    description: 'Organise l’arborescence, les icônes et l’ordre d’affichage du storefront.'
+  },
+  settings: {
+    eyebrow: 'Configuration',
+    title: 'Paramètres généraux',
+    description: 'Centralise les réglages business, paiement et préférences globales du store.'
+  },
+  customization: {
+    eyebrow: 'Branding',
+    title: 'Store theme',
+    description: 'Ajuste les visuels, les couleurs, les slides et les composants storefront avec un rendu premium.'
+  },
+  'store-config': {
+    eyebrow: 'Storefront',
+    title: 'Configuration du store',
+    description: 'Pilote sections, header, footer et modules marketplace sans casser les routes existantes.'
+  },
+  'email-config': {
+    eyebrow: 'Notifications',
+    title: 'SMTP & templates email',
+    description: 'Configure le SMTP, les templates et les tests d’envoi depuis une seule page.'
+  },
+  'notification-config': {
+    eyebrow: 'Messaging',
+    title: 'Notifications admin et clients',
+    description: 'Coordonne alertes internes, envois clients et webhooks de communication.'
+  },
+  seo: {
+    eyebrow: 'Acquisition',
+    title: 'SEO & analytics',
+    description: 'Optimise la visibilité du store et surveille les signaux d’acquisition essentiels.'
+  },
+  data: {
+    eyebrow: 'Maintenance',
+    title: 'Export, import et nettoyage',
+    description: 'Sécurise les opérations sensibles sur les données avec des garde-fous explicites.'
+  }
+};
+
+const ADMIN_NAV_GROUPS: Array<{ label: string; items: AdminNavItem[] }> = [
+  {
+    label: 'Pilotage',
+    items: [
+      { key: 'overview', label: 'Dashboard', description: 'Vue globale', icon: TrendingUp },
+      { key: 'orders', label: 'Orders / Commandes', description: 'Paiement, livraison, statuts', icon: Package },
+      { key: 'listings', label: 'Products / Produits', description: 'Catalogue et disponibilité', icon: DollarSign },
+      { key: 'create', label: 'Product Packs', description: 'Créer un produit ou pack', icon: Plus, isAccent: true }
+    ]
+  },
+  {
+    label: 'Catalogue & clients',
+    items: [
+      { key: 'categories', label: 'Categories', description: 'Arborescence et icônes', icon: FolderTree, adminOnly: true },
+      { key: 'users', label: 'Users', description: 'Clients, rôles et soldes', icon: Users, adminOnly: true }
+    ]
+  },
+  {
+    label: 'Configuration business',
+    items: [
+      { key: 'store-config', label: 'Store Theme', description: 'Header, footer, sections', icon: LucideIcons.Store, adminOnly: true },
+      { key: 'customization', label: 'Store Design', description: 'Slides, branding, palettes', icon: LucideIcons.Images, adminOnly: true },
+      { key: 'email-config', label: 'SMTP & Notifications', description: 'SMTP et templates email', icon: LucideIcons.Mail, adminOnly: true },
+      { key: 'notification-config', label: 'SMS / OTP', description: 'Alertes admin et clients', icon: LucideIcons.BellRing, adminOnly: true },
+      { key: 'admin-register-authentication', label: 'Register & Authentication', description: 'Providers et accès', icon: LucideIcons.ShieldCheck, adminOnly: true, isRoute: true },
+      { key: 'seo', label: 'Marketing / Auto Post Facebook', description: 'SEO, pixels et analytics', icon: LucideIcons.SearchCheck, adminOnly: true },
+      { key: 'settings', label: 'Settings', description: 'Réglages globaux', icon: Settings, adminOnly: true },
+      { key: 'data', label: 'Data & maintenance', description: 'Export, import, clean', icon: LucideIcons.Database, adminOnly: true }
+    ]
+  }
+];
+
 const getListingStateClasses = (listing: Listing) => {
   if (listing.isArchived) return 'bg-slate-200 text-slate-700';
   if (listing.stock > 0) return 'bg-green-100 text-green-700';
@@ -505,7 +619,8 @@ const getListingStateClasses = (listing: Listing) => {
 };
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings, categories, onUpdateStatus, onAdminOrderAction, onCreateListing, onUpdateListing, onDeleteListing, onRefreshCategories, user, siteConfig, onUpdateSiteConfig, onResendOrderInvoiceEmail, navigateTo, focusTab, onFocusTabHandled, focusOrderId, onFocusOrderHandled }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'listings' | 'create' | 'users' | 'categories' | 'settings' | 'customization' | 'store-config' | 'email-config' | 'notification-config' | 'seo' | 'data'>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [notificationAdminTab, setNotificationAdminTab] = useState<'orders' | 'client'>('orders');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<{name: string, sales: number, orders: number}[]>([]);
   const [summary, setSummary] = useState({ totalSales: 0, totalOrders: 0, totalUsers: 0 });
@@ -734,6 +849,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   const [telegramChatId, setTelegramChatId] = useState(siteConfig.telegramChatId || '');
   const [messengerNotificationsEnabled, setMessengerNotificationsEnabled] = useState(siteConfig.messengerNotificationsEnabled || false);
   const [messengerNotificationWebhookUrl, setMessengerNotificationWebhookUrl] = useState(siteConfig.messengerNotificationWebhookUrl || '');
+  const [clientNotificationTitle, setClientNotificationTitle] = useState('');
+  const [clientNotificationMessage, setClientNotificationMessage] = useState('');
+  const [clientNotificationTargetMode, setClientNotificationTargetMode] = useState<'all' | 'selected'>('all');
+  const [clientNotificationTargetUserId, setClientNotificationTargetUserId] = useState('');
+  const [isSendingClientNotification, setIsSendingClientNotification] = useState(false);
 
   const showAdminToast = (toast: { type: 'success' | 'error'; title: string; message: string }) => {
     setAdminToast(toast);
@@ -994,6 +1114,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
     });
   };
 
+  const handleSendClientNotification = async () => {
+    const title = clientNotificationTitle.trim();
+    const message = clientNotificationMessage.trim();
+    const targetUserIds = clientNotificationTargetMode === 'selected' && clientNotificationTargetUserId
+      ? [clientNotificationTargetUserId]
+      : [];
+
+    if (!title) {
+      showAdminToast({
+        type: 'error',
+        title: 'Titre requis',
+        message: 'Ajoutez un titre avant d envoyer la notification client.'
+      });
+      return;
+    }
+
+    if (!message) {
+      showAdminToast({
+        type: 'error',
+        title: 'Message requis',
+        message: 'Ajoutez un message avant d envoyer la notification client.'
+      });
+      return;
+    }
+
+    if (clientNotificationTargetMode === 'selected' && !clientNotificationTargetUserId) {
+      showAdminToast({
+        type: 'error',
+        title: 'Client requis',
+        message: 'Selectionnez un client destinataire.'
+      });
+      return;
+    }
+
+    try {
+      setIsSendingClientNotification(true);
+      const result = await api.sendClientNotification({ title, message, targetUserIds });
+      setClientNotificationTitle('');
+      setClientNotificationMessage('');
+      setClientNotificationTargetMode('all');
+      setClientNotificationTargetUserId('');
+      showAdminToast({
+        type: 'success',
+        title: 'Notification envoyee',
+        message: result.message
+      });
+    } catch (error) {
+      showAdminToast({
+        type: 'error',
+        title: 'Envoi impossible',
+        message: error instanceof Error ? error.message : "La notification client n'a pas pu etre envoyee."
+      });
+    } finally {
+      setIsSendingClientNotification(false);
+    }
+  };
+
   const saveSeoConfig = () => {
     onUpdateSiteConfig({
       seoTitle,
@@ -1108,6 +1285,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   useEffect(() => {
     if (activeTab === 'users' && user.role === UserRole.ADMIN) {
         api.getAllUsers().then(setAllUsers);
+    }
+    if (activeTab === 'notification-config' && user.role === UserRole.ADMIN) {
+        api.getAllUsers().then(setAllUsers).catch(console.error);
     }
     if (activeTab === 'overview') {
         const fetchStats = async () => {
@@ -1879,6 +2059,155 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
   });
   const draftPackagePrice = parseFloat(newListingPrice) || 0;
   const packageSavings = Math.max(0, packageOriginalTotal - draftPackagePrice);
+  const currentTabMeta = ADMIN_TAB_META[activeTab];
+  const selectedCategoryName = categories.find((category) => category.id === newListingCatId)?.name || 'Non classé';
+  const draftListingPreview = {
+    title: newListingTitle.trim() || 'Produit en brouillon',
+    subtitle: newListingGame.trim() || 'Marketplace digitale',
+    imageUrl: newListingImageUrl.trim(),
+    price: parseFloat(newListingPrice) || 0,
+    discountType: newListingDiscountType,
+    discountValue: parseFloat(newListingDiscount) || 0,
+    isInstant: newListingIsInstant,
+    isPackage: newListingIsPackage
+  };
+
+  const openDraftPreview = () => {
+    document.getElementById('listing-live-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const requestOrderStatusChange = (orderId: string, currentStatus: OrderStatus, nextStatus: OrderStatus) => {
+    if (currentStatus === nextStatus) return;
+    setAdminConfirmation({
+      title: 'Modifier le statut de cette commande ?',
+      message: `Le statut passera de "${ORDER_STATUS_LABELS[currentStatus] || currentStatus}" à "${ORDER_STATUS_LABELS[nextStatus] || nextStatus}".`,
+      confirmLabel: 'Confirmer le statut',
+      onConfirm: () => onUpdateStatus(orderId, nextStatus)
+    });
+  };
+
+  const dashboardActions = activeTab === 'create'
+    ? (
+        <>
+          <button
+            type="button"
+            onClick={() => navigateTo('admin-dashboard')}
+            className="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15"
+          >
+            Retour
+          </button>
+          <button
+            type="button"
+            onClick={resetListingForm}
+            className="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={openDraftPreview}
+            className="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15"
+          >
+            Prévisualiser
+          </button>
+          <button
+            type="submit"
+            form="admin-listing-form"
+            className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 hover:bg-slate-100"
+          >
+            <Save size={16} />
+            Enregistrer
+          </button>
+        </>
+      )
+    : (
+        <>
+          <button
+            type="button"
+            onClick={() => navigateTo('admin-dashboard')}
+            className="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15"
+          >
+            Retour au dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              resetListingForm();
+              setActiveTab('create');
+            }}
+            className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 hover:bg-slate-100"
+          >
+            <Plus size={16} />
+            Ajouter un produit
+          </button>
+        </>
+      );
+
+  const sidebar = (
+    <div className="space-y-4">
+      <AdminPanelCard className="overflow-visible">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-950 text-white shadow-lg">
+            {user.role === UserRole.ADMIN ? <Crown size={24} /> : <Shield size={22} />}
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+              {user.role === UserRole.ADMIN ? 'Administration complète' : user.role === UserRole.SUB_ADMIN ? 'Sous admin' : 'Gestion vendeur'}
+            </div>
+            <div className="mt-1 text-lg font-black text-slate-950">{siteConfig.siteName}</div>
+            <p className="mt-1 text-sm text-slate-500">Navigation stable pour toutes les pages admin.</p>
+          </div>
+        </div>
+      </AdminPanelCard>
+
+      <AdminPanelCard title="Modules admin" description="Accès rapide aux surfaces les plus utilisées.">
+        <div className="space-y-5">
+          {ADMIN_NAV_GROUPS.map((group) => (
+            <div key={group.label}>
+              <div className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">{group.label}</div>
+              <div className="space-y-2">
+                {group.items
+                  .filter((item) => !(item.adminOnly && user.role !== UserRole.ADMIN))
+                  .filter((item) => !(item.sellerHidden && user.role === UserRole.SELLER))
+                  .map((item) => {
+                    const Icon = item.icon;
+                    const isActive = !item.isRoute && activeTab === item.key;
+                    const baseClass = item.isAccent
+                      ? 'border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700'
+                      : isActive
+                        ? 'border-slate-950 bg-slate-950 text-white shadow-lg'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white';
+
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          if (item.isRoute) {
+                            navigateTo(item.key);
+                            return;
+                          }
+                          setActiveTab(item.key as AdminTab);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${baseClass}`}
+                      >
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${isActive || item.isAccent ? 'bg-white/10 text-white' : 'bg-white text-slate-700 shadow-sm'}`}>
+                          <Icon size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-black">{item.label}</div>
+                          <div className={`truncate text-xs ${isActive || item.isAccent ? 'text-slate-200' : 'text-slate-500'}`}>{item.description}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </AdminPanelCard>
+    </div>
+  );
 
   return (
     <>
@@ -1960,40 +2289,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
         </div>
       </div>
     )}
-    <div className="flex flex-col md:flex-row gap-6">
-      {/* Sidebar */}
-      <div className="w-full md:w-64 bg-white rounded-lg shadow p-4 h-fit sticky top-24">
-        <h2 className="font-bold text-lg mb-4 px-2 text-slate-800 flex items-center">
-            {user.role === UserRole.ADMIN ? <Crown size={20} className="mr-2 text-yellow-500" /> : <Shield size={20} className="mr-2 text-blue-500" />}
-            {user.role === UserRole.ADMIN ? 'Admin Panel' : user.role === UserRole.SUB_ADMIN ? 'Sous Admin' : 'Espace Vendeur'}
-        </h2>
-        <nav className="space-y-1">
-          <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'overview' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><TrendingUp size={18} /> <span>Analytique</span></button>
-          <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'orders' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Package size={18} /> <span>Commandes</span></button>
-              <button onClick={() => setActiveTab('listings')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'listings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><DollarSign size={18} /> <span>Produits</span></button>
-            {user.role === UserRole.ADMIN && (
-            <>
-              <button onClick={() => setActiveTab('customization')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'customization' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Images size={18} /> <span>Customisation</span></button>
-              <button onClick={() => setActiveTab('store-config')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'store-config' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Store size={18} /> <span>Store config</span></button>
-              <button onClick={() => setActiveTab('email-config')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'email-config' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Mail size={18} /> <span>Email config</span></button>
-              <button onClick={() => navigateTo('admin-register-authentication')} className="w-full flex items-center space-x-3 px-3 py-2 rounded-md text-slate-600 hover:bg-slate-50"><LucideIcons.ShieldCheck size={18} /> <span>Register & Auth</span></button>
-              <button onClick={() => setActiveTab('notification-config')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'notification-config' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.BellRing size={18} /> <span>Notifications</span></button>
-              <button onClick={() => setActiveTab('seo')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'seo' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.SearchCheck size={18} /> <span>SEO</span></button>
-              <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'settings' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Settings size={18} /> <span>Paramètres</span></button>
-              <button onClick={() => setActiveTab('data')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'data' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><LucideIcons.Database size={18} /> <span>Données</span></button>
-            </>
-          )}
-          {user.role === UserRole.ADMIN && (
-            <>
-                <button onClick={() => setActiveTab('categories')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'categories' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><FolderTree size={18} /> <span>Catégories</span></button>
-                <button onClick={() => setActiveTab('users')} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md ${activeTab === 'users' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}><Users size={18} /> <span>Utilisateurs</span></button>
-            </>
-          )}
-          <button onClick={() => { resetListingForm(); setActiveTab('create'); }} className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md mt-4 bg-indigo-600 text-white hover:bg-indigo-700 font-medium`}><Plus size={18} /> <span>Ajouter Produit</span></button>
-        </nav>
-      </div>
-
-      <div className="flex-1 min-h-screen pb-12">
+    <AdminWorkspace
+      eyebrow={currentTabMeta.eyebrow}
+      title={currentTabMeta.title}
+      description={currentTabMeta.description}
+      breadcrumbs={[
+        { label: 'Dashboard', onClick: () => setActiveTab('overview') },
+        { label: currentTabMeta.title }
+      ]}
+      actions={dashboardActions}
+      sidebar={sidebar}
+    >
+      <div className="min-h-screen pb-12">
         {isLoading && (
             <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -2434,64 +2741,184 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
               </div>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-black text-slate-900">Dashboard admin</h3>
-                <p className="mt-1 text-sm text-slate-500">Notification interne dès qu'une nouvelle commande arrive.</p>
-                <div className="mt-6 space-y-4">
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <span className="font-bold text-slate-800">Activer les notifications dashboard</span>
-                    <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={adminNotificationsEnabled} onChange={(e) => setAdminNotificationsEnabled(e.target.checked)} />
-                  </label>
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <span className="font-bold text-slate-800">Notification sonore</span>
-                    <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={adminNotificationSound} onChange={(e) => setAdminNotificationSound(e.target.checked)} />
-                  </label>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Fréquence de vérification</label>
-                    <input type="number" min={5} max={120} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={adminNotificationPollSeconds} onChange={(e) => setAdminNotificationPollSeconds(Number(e.target.value))} />
-                    <p className="mt-2 text-xs text-slate-500">Minimum conseillé: 5 secondes.</p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => setNotificationAdminTab('orders')}
+                className={`rounded-full px-5 py-2 text-sm font-black ${notificationAdminTab === 'orders' ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+              >
+                Commandes
+              </button>
+              <button
+                type="button"
+                onClick={() => setNotificationAdminTab('client')}
+                className={`rounded-full px-5 py-2 text-sm font-black ${notificationAdminTab === 'client' ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}
+              >
+                Notification client
+              </button>
+            </div>
+
+            {notificationAdminTab === 'orders' && (
+              <div className="grid gap-6 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-black text-slate-900">Dashboard admin</h3>
+                  <p className="mt-1 text-sm text-slate-500">Notification interne dès qu'une nouvelle commande arrive.</p>
+                  <div className="mt-6 space-y-4">
+                    <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <span className="font-bold text-slate-800">Activer les notifications dashboard</span>
+                      <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={adminNotificationsEnabled} onChange={(e) => setAdminNotificationsEnabled(e.target.checked)} />
+                    </label>
+                    <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <span className="font-bold text-slate-800">Notification sonore</span>
+                      <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={adminNotificationSound} onChange={(e) => setAdminNotificationSound(e.target.checked)} />
+                    </label>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Fréquence de vérification</label>
+                      <input type="number" min={5} max={120} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={adminNotificationPollSeconds} onChange={(e) => setAdminNotificationPollSeconds(Number(e.target.value))} />
+                      <p className="mt-2 text-xs text-slate-500">Minimum conseillé: 5 secondes.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-black text-slate-900">Telegram bot</h3>
+                  <p className="mt-1 text-sm text-slate-500">Utilise l'API Telegram officielle via bot token + chat id.</p>
+                  <div className="mt-6 space-y-4">
+                    <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <span className="font-bold text-slate-800">Activer Telegram</span>
+                      <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={telegramNotificationsEnabled} onChange={(e) => setTelegramNotificationsEnabled(e.target.checked)} />
+                    </label>
+                    <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={telegramBotToken} onChange={(e) => setTelegramBotToken(e.target.value)} placeholder="Bot token" />
+                    <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} placeholder="Chat ID" />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-black text-slate-900">WhatsApp bot</h3>
+                  <p className="mt-1 text-sm text-slate-500">Votre bot doit exposer un webhook qui accepte un JSON.</p>
+                  <div className="mt-6 space-y-4">
+                    <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <span className="font-bold text-slate-800">Activer WhatsApp</span>
+                      <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={whatsappNotificationsEnabled} onChange={(e) => setWhatsappNotificationsEnabled(e.target.checked)} />
+                    </label>
+                    <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={whatsappNotificationWebhookUrl} onChange={(e) => setWhatsappNotificationWebhookUrl(e.target.value)} placeholder="https://votre-bot/webhook/order" />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-black text-slate-900">Messenger bot</h3>
+                  <p className="mt-1 text-sm text-slate-500">Votre bot Messenger doit exposer un webhook qui accepte un JSON.</p>
+                  <div className="mt-6 space-y-4">
+                    <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <span className="font-bold text-slate-800">Activer Messenger</span>
+                      <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={messengerNotificationsEnabled} onChange={(e) => setMessengerNotificationsEnabled(e.target.checked)} />
+                    </label>
+                    <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={messengerNotificationWebhookUrl} onChange={(e) => setMessengerNotificationWebhookUrl(e.target.value)} placeholder="https://votre-bot/webhook/order" />
                   </div>
                 </div>
               </div>
+            )}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-black text-slate-900">Telegram bot</h3>
-                <p className="mt-1 text-sm text-slate-500">Utilise l'API Telegram officielle via bot token + chat id.</p>
-                <div className="mt-6 space-y-4">
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <span className="font-bold text-slate-800">Activer Telegram</span>
-                    <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={telegramNotificationsEnabled} onChange={(e) => setTelegramNotificationsEnabled(e.target.checked)} />
-                  </label>
-                  <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={telegramBotToken} onChange={(e) => setTelegramBotToken(e.target.value)} placeholder="Bot token" />
-                  <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} placeholder="Chat ID" />
+            {notificationAdminTab === 'client' && (
+              <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-black text-slate-900">Envoyer une notification client</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Diffusez les dernières informations, nouveautés ou alertes directement dans l espace notification des clients.
+                  </p>
+                  <div className="mt-6 space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Titre</label>
+                      <input
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                        value={clientNotificationTitle}
+                        onChange={(e) => setClientNotificationTitle(e.target.value)}
+                        placeholder="Ex: Nouvelle mise a jour du service"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Message</label>
+                      <textarea
+                        className="min-h-[180px] w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                        value={clientNotificationMessage}
+                        onChange={(e) => setClientNotificationMessage(e.target.value)}
+                        placeholder="Ecrivez ici les dernières informations que vos clients doivent voir."
+                      />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Audience</label>
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                          value={clientNotificationTargetMode}
+                          onChange={(e) => setClientNotificationTargetMode(e.target.value as 'all' | 'selected')}
+                        >
+                          <option value="all">Tous les clients</option>
+                          <option value="selected">Client specifique</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Destinataire</label>
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 disabled:opacity-60"
+                          value={clientNotificationTargetUserId}
+                          onChange={(e) => setClientNotificationTargetUserId(e.target.value)}
+                          disabled={clientNotificationTargetMode !== 'selected'}
+                        >
+                          <option value="">Selectionner un client</option>
+                          {allUsers.filter((account) => account.role === UserRole.CLIENT).map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.fullName || account.username} - {account.email}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSendClientNotification}
+                        disabled={isSendingClientNotification}
+                        className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
+                      >
+                        {isSendingClientNotification ? 'Envoi en cours...' : 'Envoyer aux clients'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 className="text-lg font-black text-slate-900">Aperçu client</h3>
+                    <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-black text-slate-900">{clientNotificationTitle || 'Titre de notification'}</div>
+                          <div className="mt-1 text-sm leading-6 text-slate-600">{clientNotificationMessage || 'Le message saisi apparaitra ici dans l espace client.'}</div>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase text-indigo-700">Nouveau</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 className="text-lg font-black text-slate-900">Portee de l envoi</h3>
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                        {clientNotificationTargetMode === 'all'
+                          ? `${allUsers.filter((account) => account.role === UserRole.CLIENT).length} clients recevront cette notification.`
+                          : clientNotificationTargetUserId
+                            ? '1 client recevra cette notification.'
+                            : 'Selectionnez un client pour finaliser cet envoi.'}
+                      </div>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+                        Utilisez cet onglet pour partager vos dernières updates, informations importantes, maintenance, promos ou changements de delai.
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-black text-slate-900">WhatsApp bot</h3>
-                <p className="mt-1 text-sm text-slate-500">Votre bot doit exposer un webhook qui accepte un JSON.</p>
-                <div className="mt-6 space-y-4">
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <span className="font-bold text-slate-800">Activer WhatsApp</span>
-                    <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={whatsappNotificationsEnabled} onChange={(e) => setWhatsappNotificationsEnabled(e.target.checked)} />
-                  </label>
-                  <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={whatsappNotificationWebhookUrl} onChange={(e) => setWhatsappNotificationWebhookUrl(e.target.value)} placeholder="https://votre-bot/webhook/order" />
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-black text-slate-900">Messenger bot</h3>
-                <p className="mt-1 text-sm text-slate-500">Votre bot Messenger doit exposer un webhook qui accepte un JSON.</p>
-                <div className="mt-6 space-y-4">
-                  <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <span className="font-bold text-slate-800">Activer Messenger</span>
-                    <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={messengerNotificationsEnabled} onChange={(e) => setMessengerNotificationsEnabled(e.target.checked)} />
-                  </label>
-                  <input className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" value={messengerNotificationWebhookUrl} onChange={(e) => setMessengerNotificationWebhookUrl(e.target.value)} placeholder="https://votre-bot/webhook/order" />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -4201,16 +4628,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
 
         {/* --- CREATE LISTING TAB --- */}
         {activeTab === 'create' && (
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 max-w-3xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold">{editingListing ? 'Modifier le Produit' : 'Ajouter Nouveau Produit'}</h3>
-              {editingListing && (
-                <button type="button" onClick={resetListingForm} className="text-sm text-slate-500 hover:text-slate-800">
-                  Annuler l'édition
-                </button>
-              )}
-            </div>
-            <form onSubmit={handleSubmitListing} className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-6">
+              <AdminPanelCard
+                title={editingListing ? 'Modification produit' : 'Nouveau produit'}
+                description="Les actions principales restent accessibles en haut et en bas de la page. Tu peux enregistrer, annuler, prévisualiser ou revenir au dashboard à tout moment."
+                action={editingListing ? (
+                  <button type="button" onClick={resetListingForm} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                    Annuler l'édition
+                  </button>
+                ) : null}
+              >
+            <form id="admin-listing-form" onSubmit={handleSubmitListing} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                    <label className="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
@@ -4752,10 +5181,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                   </div>
               </div>
 
-              <button type="submit" className="w-full bg-slate-900 text-white font-bold py-3 rounded-md hover:bg-slate-800 transition">
-                {editingListing ? 'Enregistrer les modifications' : "Créer l'Offre"}
-              </button>
+              <AdminStickyActionBar
+                note="Les boutons restent visibles pendant les longs formulaires pour éviter les allers-retours."
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => navigateTo('admin-dashboard')}
+                      className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      Retour
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetListingForm}
+                      className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openDraftPreview}
+                      className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
+                    >
+                      Prévisualiser
+                    </button>
+                    <button type="submit" className="inline-flex items-center rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800">
+                      <Save size={16} className="mr-2" />
+                      {editingListing ? 'Enregistrer les modifications' : "Créer l'offre"}
+                    </button>
+                  </>
+                }
+              />
             </form>
+              </AdminPanelCard>
+            </div>
+
+            <div className="space-y-6 xl:sticky xl:top-28 xl:self-start">
+              <AdminPanelCard title="Prévisualisation" description="Le résumé reste visible même quand le formulaire est long." className="overflow-visible">
+                <div id="listing-live-preview" className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950 text-white">
+                  <div className="relative h-48 overflow-hidden">
+                    {draftListingPreview.imageUrl ? (
+                      <img src={draftListingPreview.imageUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full bg-[radial-gradient(circle_at_top_left,#334155,#0f172a_65%,#020617)]" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/35 to-transparent" />
+                    <div className="absolute left-4 top-4 inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white">
+                      {draftListingPreview.isPackage ? 'Pack' : 'Produit'}
+                    </div>
+                  </div>
+                  <div className="space-y-4 p-5">
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">{selectedCategoryName}</div>
+                      <h3 className="mt-2 text-2xl font-black">{draftListingPreview.title}</h3>
+                      <p className="mt-2 text-sm text-slate-300">{draftListingPreview.subtitle}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Prix</div>
+                        <div className="mt-1 text-lg font-black">{draftListingPreview.price ? `${draftListingPreview.price.toFixed(2)} TND` : 'À définir'}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Livraison</div>
+                        <div className="mt-1 text-lg font-black">{draftListingPreview.isInstant ? 'Instantanée' : 'Manuelle'}</div>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                      {draftListingPreview.discountType !== DiscountType.NONE && draftListingPreview.discountValue > 0
+                        ? `Promotion active: ${draftListingPreview.discountType === DiscountType.PERCENT ? `${draftListingPreview.discountValue}%` : `${draftListingPreview.discountValue.toFixed(2)} TND`} de remise.`
+                        : 'Aucune promotion configurée pour le moment.'}
+                    </div>
+                  </div>
+                </div>
+              </AdminPanelCard>
+
+              <AdminPanelCard title="Raccourcis" description="Pour simplifier la vie d’un admin non technique.">
+                <div className="space-y-3 text-sm text-slate-600">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    Le bouton <span className="font-black text-slate-900">Enregistrer</span> reste disponible en sticky même au milieu de la page.
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <span className="font-black text-slate-900">Prévisualiser</span> ramène directement à cette carte pour vérifier le rendu avant publication.
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <span className="font-black text-slate-900">Retour</span> renvoie au dashboard sans toucher aux routes existantes.
+                  </div>
+                </div>
+              </AdminPanelCard>
+            </div>
           </div>
         )}
         
@@ -5161,15 +5675,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                                   <aside className="space-y-3">
                                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
                                       <div className="text-xs font-black uppercase tracking-widest text-slate-400">Actions administratives</div>
-                                      <select className={`mt-3 w-full rounded-xl px-4 py-3 text-xs font-bold uppercase border-none focus:ring-0 cursor-pointer ${getOrderStatusClasses(o.status)}`} value={o.status} onChange={(e) => onUpdateStatus(o.id, e.target.value as OrderStatus)}>
+                                      <select className={`mt-3 w-full rounded-xl px-4 py-3 text-xs font-bold uppercase border-none focus:ring-0 cursor-pointer ${getOrderStatusClasses(o.status)}`} value={o.status} onChange={(e) => requestOrderStatusChange(o.id, o.status, e.target.value as OrderStatus)}>
                                         {[OrderStatus.PAYMENT_UNDER_REVIEW, OrderStatus.PAYMENT_APPROVED, OrderStatus.PAYMENT_REJECTED, OrderStatus.IN_DELIVERY, OrderStatus.DELIVERED, OrderStatus.CANCELLED, OrderStatus.REFUNDED].map(s => <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>)}
                                       </select>
                                       <button type="button" onClick={() => onAdminOrderAction('approvePayment', o.id)} className="mt-3 flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white hover:bg-emerald-700">
                                         Approuver paiement
                                       </button>
                                       <button type="button" onClick={() => {
-                                        const reason = window.prompt('Raison du rejet paiement ?') || 'Paiement rejeté.';
-                                        onAdminOrderAction('rejectPayment', o.id, { reason });
+                                        setAdminConfirmation({
+                                          title: 'Rejeter ce paiement ?',
+                                          message: 'Le paiement sera marqué comme rejeté et le client recevra la mise à jour de statut.',
+                                          confirmLabel: 'Rejeter le paiement',
+                                          onConfirm: () => onAdminOrderAction('rejectPayment', o.id, { reason: 'Paiement rejeté par un administrateur.' })
+                                        });
                                       }} className="mt-3 flex w-full items-center justify-center rounded-xl bg-red-50 px-4 py-3 text-xs font-black text-red-700 hover:bg-red-100">
                                         Rejeter paiement
                                       </button>
@@ -5199,9 +5717,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                         );
                     })}
                     {filteredOrders.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center text-slate-400">
-                        Aucune commande trouvée pour ces critères.
-                      </div>
+                      <AdminEmptyState
+                        title="Aucune commande trouvée"
+                        description="Ajuste les filtres, la recherche ou la période pour retrouver une commande à traiter."
+                      />
                     )}
                    </div>
                    <aside className="space-y-4">
@@ -5233,11 +5752,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
           })()
         )}
         {activeTab === 'listings' && (
-             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+             <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
                  <div className="px-6 py-4 border-b border-slate-100 font-bold bg-slate-50 flex justify-between items-center">
                      <span>Inventaire Produits</span>
                      <button onClick={() => setActiveTab('create')} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-700 transition">Nouveau</button>
                  </div>
+                 {listings.length === 0 ? (
+                   <div className="p-6">
+                     <AdminEmptyState
+                       title="Aucun produit dans le catalogue"
+                       description="Commence par créer un produit ou un pack pour alimenter la marketplace."
+                       action={
+                         <button onClick={() => setActiveTab('create')} className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800">
+                           Ajouter un produit
+                         </button>
+                       }
+                     />
+                   </div>
+                 ) : (
                  <div className="overflow-x-auto">
                      <table className="w-full text-left">
                          <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
@@ -5320,10 +5852,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
                          </tbody>
                      </table>
                  </div>
+                 )}
              </div>
         )}
       </div>
-    </div>
+    </AdminWorkspace>
     {listingPendingDelete && (
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200">
         <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
@@ -5379,8 +5912,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, listings
 };
 
 // --- USER DASHBOARD ---
-export const UserDashboard: React.FC<{user: User, orders: Order[], navigateTo: (page: string) => void}> = ({ user, orders, navigateTo }) => {
+export const UserDashboard: React.FC<{
+  user: User;
+  orders: Order[];
+  notifications: ClientNotification[];
+  navigateTo: (page: string) => void;
+  onMarkNotificationRead: (notificationId: string) => void;
+  onMarkAllNotificationsRead: () => void;
+}> = ({ user, orders, notifications, navigateTo, onMarkNotificationRead, onMarkAllNotificationsRead }) => {
   const sortedOrders = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const unreadNotifications = notifications.filter((notification) => !notification.read);
   const [deliveryByOrder, setDeliveryByOrder] = useState<Record<string, Array<{ id: string; deliveryContent: string; deliveryType: string; activationGuide?: string; restrictions?: string; region?: string }>>>({});
   const [deliveryLoadingId, setDeliveryLoadingId] = useState<string | null>(null);
   const [deliveryError, setDeliveryError] = useState<Record<string, string>>({});
@@ -5445,6 +5986,46 @@ export const UserDashboard: React.FC<{user: User, orders: Order[], navigateTo: (
                 </div>
               ))}
               {orders.length === 0 && <p className="text-xs text-slate-400 italic">Aucune activité récente.</p>}
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="font-bold text-slate-900 flex items-center">
+                <LucideIcons.BellRing size={18} className="mr-2 text-indigo-500" /> Notifications
+              </h3>
+              {unreadNotifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onMarkAllNotificationsRead}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50"
+                >
+                  Tout marquer lu
+                </button>
+              )}
+            </div>
+            <div className="space-y-3">
+              {notifications.slice(0, 6).map((notification) => (
+                <button
+                  key={notification.id}
+                  type="button"
+                  onClick={() => !notification.read && onMarkNotificationRead(notification.id)}
+                  className={`w-full rounded-2xl border p-4 text-left transition ${notification.read ? 'border-slate-200 bg-slate-50' : 'border-indigo-200 bg-indigo-50 hover:border-indigo-300'}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black text-slate-900">{notification.title}</div>
+                      <div className="mt-1 text-xs leading-5 text-slate-600">{notification.message}</div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {notification.orderNumber && <span>{notification.orderNumber}</span>}
+                        <span>{new Date(notification.createdAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    {!notification.read && <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black uppercase text-indigo-700">Nouveau</span>}
+                  </div>
+                </button>
+              ))}
+              {notifications.length === 0 && <p className="text-xs text-slate-400 italic">Aucune notification pour le moment.</p>}
             </div>
           </div>
         </div>

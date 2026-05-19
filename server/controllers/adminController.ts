@@ -8,6 +8,7 @@ import ExcelJS from 'exceljs';
 import { DEFAULT_EMAIL_TEMPLATES, getEmailTemplate, renderTemplate, sendEmail } from '../utils/email.js';
 import { resendOrderConfirmationEmail, sendDeliveryEmail, sendPaymentApprovedEmail } from '../services/orderEmailService.js';
 import { encryptDeliveryContent, decryptDeliveryContent } from '../services/deliverySecurityService.js';
+import { notifyClientOrderStatus, sendCustomClientNotification } from '../services/clientNotificationService.js';
 
 const SITE_CONFIG_KEY = 'site';
 const legacySiteConfigPath = path.join(process.cwd(), 'server', 'data', 'site-config.json');
@@ -466,6 +467,11 @@ export const getAllOrders = async (_req: Request, res: Response) => {
 };
 
 export const updateOrderStatus = async (req: Request & { user?: { id?: string; role?: string } }, res: Response) => {
+    const previousOrder = await prisma.order.findUnique({
+        where: { id: req.params.id },
+        select: { status: true }
+    });
+
     const order = await prisma.order.update({
         where: { id: req.params.id },
         data: {
@@ -498,6 +504,7 @@ export const updateOrderStatus = async (req: Request & { user?: { id?: string; r
             metadata: { status: req.body.status }
         }
     });
+    await notifyClientOrderStatus({ orderId: order.id, status: order.status, previousStatus: previousOrder?.status || null });
 
     res.json(serializeAdminOrder(order));
 };
@@ -527,6 +534,7 @@ export const approveOrderPayment = async (req: Request & { user?: { id?: string;
     await prisma.orderActionLog.create({
         data: { orderId: order.id, ...getActor(req), action: 'PAYMENT_APPROVED', ...requestMeta(req), metadata: { reviewedBy: req.user?.id || null } }
     });
+    await notifyClientOrderStatus({ orderId: order.id, status: order.status });
     await sendPaymentApprovedEmail(order);
     res.json(serializeAdminOrder(order));
 };
@@ -551,6 +559,7 @@ export const rejectOrderPayment = async (req: Request & { user?: { id?: string; 
     await prisma.orderActionLog.create({
         data: { orderId: order.id, ...getActor(req), action: 'PAYMENT_REJECTED', ...requestMeta(req), metadata: { reason } }
     });
+    await notifyClientOrderStatus({ orderId: order.id, status: order.status });
     res.json(serializeAdminOrder(order));
 };
 
@@ -581,6 +590,7 @@ export const createOrderDelivery = async (req: Request & { user?: { id?: string;
     await prisma.orderActionLog.create({
         data: { orderId: order.id, ...getActor(req), action: 'DELIVERY_CREATED', ...requestMeta(req), metadata: { deliveryId: delivery.id, orderItemId: req.body.orderItemId || null } }
     });
+    await notifyClientOrderStatus({ orderId: order.id, status: 'IN_DELIVERY', previousStatus: order.status });
 
     const updated = await prisma.order.findUniqueOrThrow({
         where: { id: order.id },
@@ -611,6 +621,7 @@ export const sendOrderDelivery = async (req: Request & { user?: { id?: string; r
     await prisma.orderActionLog.create({
         data: { orderId: order.id, ...getActor(req), action: 'DELIVERY_SENT', ...requestMeta(req), metadata: { deliveryCount: updated.deliveries.length } }
     });
+    await notifyClientOrderStatus({ orderId: updated.id, status: updated.status, previousStatus: order.status });
 
     await sendDeliveryEmail({
         ...updated,
@@ -656,6 +667,32 @@ export const resendOrderDeliveryEmail = async (req: Request & { user?: { id?: st
         include: { items: true, invoice: true, payments: true, deliveries: true, actionLogs: { orderBy: { createdAt: 'asc' } }, user: { select: { id: true, username: true, email: true, avatarUrl: true } } }
     });
     res.json(serializeAdminOrder(updated));
+};
+
+export const sendClientNotification = async (req: Request & { user?: { id?: string; role?: string } }, res: Response) => {
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+    const targetUserIds = Array.isArray(req.body?.targetUserIds)
+        ? req.body.targetUserIds.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+        : [];
+
+    if (!title) return res.status(400).json({ error: 'Le titre de la notification est obligatoire.' });
+    if (!message) return res.status(400).json({ error: 'Le message de la notification est obligatoire.' });
+
+    const result = await sendCustomClientNotification({
+        title,
+        message,
+        targetUserIds,
+        actorId: req.user?.id || null
+    });
+
+    res.status(201).json({
+        success: true,
+        recipients: result.recipients,
+        message: result.recipients > 0
+            ? `Notification envoyee a ${result.recipients} client(s).`
+            : 'Aucun client correspondant pour cette notification.'
+    });
 };
 
 const variantString = (variants: Array<{ name: string; price: number; order: number }>) =>

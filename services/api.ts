@@ -1,4 +1,4 @@
-import { Listing, Order, OrderStatus, User, UserRole, SubscriptionTier, Category, SubCategory, CartItem, SiteConfig, GuestCheckoutPayload, AuthProviderConfig, AuthProviderKey, PublicAuthProvider } from '../types';
+import { Listing, Order, OrderStatus, User, UserRole, SubscriptionTier, Category, SubCategory, CartItem, SiteConfig, GuestCheckoutPayload, AuthProviderConfig, AuthProviderKey, PublicAuthProvider, ClientNotification } from '../types';
 
 const API_URL = '/api';
 
@@ -112,6 +112,9 @@ export const api = {
 
   // Orders
   getMyOrders: () => fetchWithFallback<Order[]>(`${API_URL}/orders/my`, { headers: getHeaders() }, []),
+  getMyNotifications: () => fetchWithFallback<ClientNotification[]>(`${API_URL}/users/me/notifications`, { headers: getHeaders() }, []),
+  markNotificationRead: (notificationId: string) => fetchWithFallback<ClientNotification>(`${API_URL}/users/me/notifications/${notificationId}/read`, { method: 'PATCH', headers: getHeaders() }),
+  markAllNotificationsRead: () => fetchWithFallback<{ success: boolean }>(`${API_URL}/users/me/notifications/read-all`, { method: 'POST', headers: getHeaders() }),
   getAllOrders: () => fetchWithFallback<Order[]>(`${API_URL}/orders/admin`, { headers: getHeaders() }, []),
   trackOrder: (orderNumber: string, params?: { token?: string; email?: string }) => {
     const query = new URLSearchParams();
@@ -144,6 +147,12 @@ export const api = {
     `${API_URL}/admin/email/test`,
     { method: 'POST', headers: getHeaders(), body: JSON.stringify({ to }) }
   ),
+  sendClientNotification: (data: { title: string; message: string; targetUserIds?: string[] }) =>
+    fetchWithFallback<{ success: boolean; recipients: number; message: string }>(`${API_URL}/admin/notifications/clients`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    }),
   getAuthProviders: () => fetchWithFallback<AuthProviderConfig[]>(`${API_URL}/admin/auth-providers`, { headers: getHeaders() }, []),
   updateAuthProvider: (
     providerKey: AuthProviderKey,

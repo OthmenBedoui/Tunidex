@@ -1,6 +1,6 @@
 
 import express from 'express';
-import { approveOrderPayment, cleanSiteData, createOrderDelivery, exportSiteData, getStats, getAllUsers, getAllOrders, getSiteConfig, importSiteData, rejectOrderPayment, resendOrderDeliveryEmail, resendOrderInvoiceEmail, sendOrderDelivery, sendTestEmail, updateSiteConfig, updateUserRole, updateUserBalance, updateOrderStatus } from '../controllers/adminController.js';
+import { approveOrderPayment, cleanSiteData, createOrderDelivery, exportSiteData, getStats, getAllUsers, getAllOrders, getSiteConfig, importSiteData, rejectOrderPayment, resendOrderDeliveryEmail, resendOrderInvoiceEmail, sendClientNotification, sendOrderDelivery, sendTestEmail, updateSiteConfig, updateUserRole, updateUserBalance, updateOrderStatus } from '../controllers/adminController.js';
 import { getAuthProviders, updateAuthProvider } from '../controllers/authProviderController.js';
 import { getSeoAnalytics, trackSiteVisit } from '../controllers/seoController.js';
 import { confirmEmailChange, deleteAccount, requestEmailChange, updateProfile, updateSubscription } from '../controllers/authController.js';
@@ -33,6 +33,7 @@ router.patch('/config', authenticate, isAdmin, updateSiteConfig);
 router.get('/admin/auth-providers', authenticate, isAdmin, getAuthProviders);
 router.patch('/admin/auth-providers/:providerKey', authenticate, isAdmin, updateAuthProvider);
 router.post('/admin/email/test', authenticate, isAdmin, sendTestEmail);
+router.post('/admin/notifications/clients', authenticate, isAdmin, sendClientNotification);
 router.get('/admin/data/export', authenticate, isAdmin, exportSiteData);
 router.post('/admin/data/import', authenticate, isAdmin, importSiteData);
 router.post('/admin/data/clean', authenticate, isAdmin, cleanSiteData);

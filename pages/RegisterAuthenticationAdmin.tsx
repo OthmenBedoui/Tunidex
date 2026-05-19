@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Apple, CheckCircle2, Chrome, Facebook, Gamepad2, Github, KeyRound, Loader2, Mail, RefreshCw, Save, Settings2, ShieldCheck, Sparkles, ToggleLeft, ToggleRight } from 'lucide-react';
 import { api } from '../services/api';
 import { AuthProviderConfig, AuthProviderField, AuthProviderKey } from '../types';
+import { AdminPanelCard, AdminWorkspace } from '../components/AdminWorkspace';
 
 interface RegisterAuthenticationAdminProps {
   navigateTo: (page: string, slug?: string) => void;
@@ -138,41 +139,53 @@ const RegisterAuthenticationAdmin: React.FC<RegisterAuthenticationAdminProps> = 
   };
 
   return (
-    <div className="space-y-8">
-      <section className="overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl">
-        <div className="bg-[radial-gradient(circle_at_top_left,rgba(79,70,229,0.32),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(20,184,166,0.2),transparent_28%)] p-8 lg:p-10">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-white/85">
-                <ShieldCheck size={14} />
-                Register & Authentication
-              </div>
-              <h1 className="text-3xl font-black leading-tight sm:text-4xl">Manage registration methods and social login providers.</h1>
-              <p className="mt-4 text-sm leading-7 text-slate-300 sm:text-base">
-                Control Email + Password, Google, Facebook, Apple, and future providers from one admin surface synchronized with the live `.env` configuration.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
+    <AdminWorkspace
+      eyebrow="Register & Authentication"
+      title="Gestion des méthodes d'inscription et d'authentification"
+      description="Pilote Email + Password, Google, Facebook, Apple et les futurs providers depuis une surface admin unifiée, pensée pour les équipes non techniques."
+      breadcrumbs={[
+        { label: 'Dashboard', onClick: () => navigateTo('admin-dashboard') },
+        { label: 'Register & Authentication' }
+      ]}
+      actions={
+        <>
+          <button
+            type="button"
+            onClick={() => navigateTo('admin-dashboard')}
+            className="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15"
+          >
+            Retour au dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadProviders()}
+            className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 hover:bg-slate-100"
+          >
+            <RefreshCw size={16} />
+            Synchroniser l'environnement
+          </button>
+        </>
+      }
+      sidebar={
+        <div className="space-y-4">
+          <AdminPanelCard title="Navigation rapide" description="Revenez au centre de pilotage ou poursuivez la configuration auth.">
+            <div className="space-y-2">
               <button
                 type="button"
                 onClick={() => navigateTo('admin-dashboard')}
-                className="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15"
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-white"
               >
-                Back to dashboard
+                Dashboard admin
+                <ShieldCheck size={16} className="text-slate-400" />
               </button>
-              <button
-                type="button"
-                onClick={() => void loadProviders()}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 hover:bg-slate-100"
-              >
-                <RefreshCw size={16} />
-                Sync from environment
-              </button>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                Les changements sont enregistrés provider par provider sans modifier les routes existantes.
+              </div>
             </div>
-          </div>
+          </AdminPanelCard>
         </div>
-      </section>
-
+      }
+    >
       <section className="grid gap-5 md:grid-cols-3">
         {[
           { label: 'Active providers', value: summary.active, icon: CheckCircle2 },
@@ -391,7 +404,7 @@ const RegisterAuthenticationAdmin: React.FC<RegisterAuthenticationAdminProps> = 
           )}
         </div>
       )}
-    </div>
+    </AdminWorkspace>
   );
 };
 

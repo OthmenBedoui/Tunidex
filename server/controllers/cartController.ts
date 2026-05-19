@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import prisma from '../prisma.js';
 import { clearUserCart, createCheckoutOrder } from '../services/checkoutService.js';
+import { notifyClientOrderStatus, serializeClientNotification } from '../services/clientNotificationService.js';
 import { sendOrderConfirmationEmail } from '../services/orderEmailService.js';
 import { notifyNewOrder } from '../services/orderNotificationService.js';
 import { decryptDeliveryContent } from '../services/deliverySecurityService.js';
@@ -205,6 +206,7 @@ export const checkout = async (req: AuthRequest, res: Response) => {
 
         await clearUserCart(user.id);
         await notifyNewOrder(order);
+        await notifyClientOrderStatus({ orderId: order.id, status: order.status });
         const emailResult = await sendOrderConfirmationEmail(order);
         res.json(serializeOrder({ ...order, emailStatus: emailResult.status, emailError: emailResult.error }));
     } catch (error) {
@@ -228,6 +230,7 @@ export const guestCheckout = async (req: Request, res: Response) => {
         });
 
         await notifyNewOrder(order);
+        await notifyClientOrderStatus({ orderId: order.id, status: order.status });
         const emailResult = await sendOrderConfirmationEmail(order);
         res.status(201).json(serializeOrder({ ...order, emailStatus: emailResult.status, emailError: emailResult.error }));
     } catch (error) {
@@ -266,6 +269,7 @@ export const confirmCheckout = async (req: AuthRequest, res: Response) => {
 
         if (user) await clearUserCart(user.id);
         await notifyNewOrder(order);
+        await notifyClientOrderStatus({ orderId: order.id, status: order.status });
         const emailResult = await sendOrderConfirmationEmail(order);
         res.status(201).json(serializeOrder({ ...order, emailStatus: emailResult.status, emailError: emailResult.error }));
     } catch (error) {
@@ -312,6 +316,66 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
         orderBy: { createdAt: 'desc' }
     });
     res.json(orders.map((order) => serializeOrder(order)));
+};
+
+export const getMyNotifications = async (req: AuthRequest, res: Response) => {
+    const notifications = await prisma.clientNotification.findMany({
+        where: { userId: req.user?.id },
+        include: {
+            order: {
+                select: {
+                    orderNumber: true,
+                    status: true
+                }
+            }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100
+    });
+
+    res.json(notifications.map(serializeClientNotification));
+};
+
+export const markMyNotificationRead = async (req: AuthRequest, res: Response) => {
+    const notification = await prisma.clientNotification.findFirst({
+        where: {
+            id: req.params.notificationId,
+            userId: req.user?.id
+        }
+    });
+
+    if (!notification) {
+        return res.status(404).json({ error: 'Notification introuvable.' });
+    }
+
+    const updated = await prisma.clientNotification.update({
+        where: { id: notification.id },
+        data: { readAt: notification.readAt || new Date() },
+        include: {
+            order: {
+                select: {
+                    orderNumber: true,
+                    status: true
+                }
+            }
+        }
+    });
+
+    res.json(serializeClientNotification(updated));
+};
+
+export const markAllMyNotificationsRead = async (req: AuthRequest, res: Response) => {
+    await prisma.clientNotification.updateMany({
+        where: {
+            userId: req.user?.id,
+            readAt: null
+        },
+        data: {
+            readAt: new Date()
+        }
+    });
+
+    res.json({ success: true });
 };
 
 export const trackOrder = async (req: AuthRequest, res: Response) => {
