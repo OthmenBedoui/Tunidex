@@ -40,6 +40,7 @@ model User {
   sentDeliveries   Delivery[] @relation("DeliverySender")
   loyaltyPoints    LoyaltyPoint[]
   cart             Cart?
+  clientNotifications ClientNotification[]
 }
 
 model Sequence {
@@ -239,6 +240,7 @@ model Order {
   payments            Payment[]
   deliveries          Delivery[]
   actionLogs          OrderActionLog[]
+  clientNotifications ClientNotification[]
   loyaltyPoints       LoyaltyPoint[]
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
@@ -373,6 +375,25 @@ model OrderActionLog {
   createdAt DateTime @default(now())
 
   @@index([orderId, createdAt])
+}
+
+model ClientNotification {
+  id        String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId    String?
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  type       String   @default("SYSTEM")
+  title      String
+  message    String
+  metadata   Json?
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([orderId])
 }
 
 model LoyaltyPoint {

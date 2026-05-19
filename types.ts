@@ -412,6 +412,22 @@ export interface OrderActionLog {
   createdAt: string;
 }
 
+export interface ClientNotification {
+  id: string;
+  userId: string;
+  orderId?: string | null;
+  orderNumber?: string | null;
+  orderStatus?: string | null;
+  type: 'ORDER_STATUS' | 'CUSTOM' | 'SYSTEM' | string;
+  title: string;
+  message: string;
+  metadata?: Record<string, unknown> | null;
+  read: boolean;
+  readAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InvoiceItem {
   id: string;
   listingId?: string;
